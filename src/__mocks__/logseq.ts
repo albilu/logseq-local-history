@@ -69,6 +69,7 @@ export function installMockLogseq(): void {
 export function resetMockLogseq(): void {
   vi.resetAllMocks();
   mockFileStorage.clear();
+  mockLogseq.ready.mockImplementation(async (cb?: Function) => cb?.());
   mockFileStorage.hasItem.mockImplementation(async (key: string) => storage.has(key));
   mockFileStorage.getItem.mockImplementation(async (key: string) => {
     const value = storage.get(key);
