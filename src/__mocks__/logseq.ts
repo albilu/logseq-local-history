@@ -1,3 +1,4 @@
+import type { PluginSettings } from '../types';
 import { vi } from 'vitest';
 
 const storage = new Map<string, string>();
@@ -36,6 +37,7 @@ export const mockUI = {
 
 export const mockApp = {
   registerCommandPalette: vi.fn(),
+  registerCommandShortcut: vi.fn(),
   registerUIItem: vi.fn(),
   onCurrentGraphChanged: vi.fn(),
 };
@@ -54,7 +56,7 @@ export const mockLogseq = {
   setMainUIInlineStyle: vi.fn(),
   onSettingsChanged: vi.fn(),
   beforeunload: vi.fn(),
-  settings: { maxVersions: 50, debounceMs: 5000, excludePages: '' },
+  settings: { maxVersions: 50, debounceMs: 5000, excludePages: '', disabled: false } as PluginSettings,
   FileStorage: mockFileStorage,
   Editor: mockEditor,
   UI: mockUI,
@@ -63,7 +65,7 @@ export const mockLogseq = {
 };
 
 export function installMockLogseq(): void {
-  (globalThis as { logseq?: typeof mockLogseq }).logseq = mockLogseq;
+  (globalThis as unknown as { logseq?: typeof mockLogseq }).logseq = mockLogseq;
 }
 
 export function resetMockLogseq(): void {
@@ -84,5 +86,5 @@ export function resetMockLogseq(): void {
   mockFileStorage.removeItem.mockImplementation(async (key: string) => {
     storage.delete(key);
   });
-  mockLogseq.settings = { maxVersions: 50, debounceMs: 5000, excludePages: '' };
+  mockLogseq.settings = { maxVersions: 50, debounceMs: 5000, excludePages: '', disabled: false };
 }

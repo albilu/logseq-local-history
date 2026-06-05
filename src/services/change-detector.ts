@@ -4,9 +4,12 @@ import { addSnapshot, deleteSnapshot, getSnapshots } from './history-store';
 import { areSnapshotsEqual, serializeBlockTree } from './snapshot';
 
 type DbChangedBlock = {
+  uuid?: string;
   page?: {
     name?: string;
-  };
+    id?: number;
+    [key: string]: unknown;
+  } | string | number | null;
 };
 
 type DbChangedData = {
@@ -14,6 +17,14 @@ type DbChangedData = {
   txData: unknown[];
   txMeta?: unknown;
 };
+
+function getBlockPageName(block: DbChangedBlock): string | undefined {
+  if (!block.page || typeof block.page !== 'object') {
+    return undefined;
+  }
+
+  return typeof block.page.name === 'string' ? block.page.name : undefined;
+}
 
 type TimerMap = Map<string, ReturnType<typeof setTimeout>>;
 type CaptureMap = Map<string, Promise<void>>;
@@ -140,7 +151,7 @@ async function collectAffectedPages(data: DbChangedData, settings: PluginSetting
   const affectedPages = new Set<string>();
 
   for (const block of data.blocks) {
-    const pageName = block.page?.name;
+    const pageName = getBlockPageName(block);
     if (!pageName) {
       continue;
     }

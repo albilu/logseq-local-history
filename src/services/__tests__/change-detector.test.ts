@@ -32,6 +32,13 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
 }
 
+type ProcessEvents = {
+  on: (event: 'unhandledRejection', handler: (reason: unknown) => void) => void;
+  off: (event: 'unhandledRejection', handler: (reason: unknown) => void) => void;
+};
+
+const processEvents = (globalThis as typeof globalThis & { process: ProcessEvents }).process;
+
 async function waitForSnapshots(pageName: string, expectedLength: number): Promise<void> {
   for (let index = 0; index < 20; index += 1) {
     const snapshots = await getSnapshots(pageName);
@@ -293,7 +300,7 @@ describe('handleDbChanged', () => {
       unhandledRejections.push(reason);
     };
 
-    process.on('unhandledRejection', onUnhandledRejection);
+    processEvents.on('unhandledRejection', onUnhandledRejection);
 
     mockEditor.getPageBlocksTree.mockResolvedValue([
       { uuid: 'b1', content: 'Hello', children: [] },
@@ -320,7 +327,7 @@ describe('handleDbChanged', () => {
     await vi.advanceTimersByTimeAsync(5000);
     await flushMicrotasks();
 
-    process.off('unhandledRejection', onUnhandledRejection);
+    processEvents.off('unhandledRejection', onUnhandledRejection);
 
     expect(mockEditor.getPageBlocksTree).toHaveBeenCalledWith('test page');
     expect(await getSnapshots('test page')).toHaveLength(1);
