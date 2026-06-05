@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { installMockLogseq, resetMockLogseq } from '../../__mocks__/logseq';
+import { installMockLogseq, mockFileStorage, resetMockLogseq } from '../../__mocks__/logseq';
 import type { PageSnapshot } from '../../types';
 import {
   addSnapshot,
@@ -94,6 +94,22 @@ describe('addSnapshot', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].id).toBe(snapshot.id);
   });
+
+  it('keeps snapshots separate when page names sanitize to the same value', async () => {
+    const first = makeSnapshot({ id: 'snapshot-1', pageName: 'My/Page' });
+    const second = makeSnapshot({ id: 'snapshot-2', pageName: 'my?page' });
+
+    await addSnapshot(first, 50);
+    await addSnapshot(second, 50);
+
+    expect(await getSnapshots(first.pageName)).toEqual([first]);
+    expect(await getSnapshots(second.pageName)).toEqual([second]);
+
+    const index = await getIndex();
+
+    expect(index[first.pageName][0].id).toBe(first.id);
+    expect(index[second.pageName][0].id).toBe(second.id);
+  });
 });
 
 describe('deleteSnapshot', () => {
@@ -148,6 +164,23 @@ describe('clearAllHistory', () => {
   it('removes all history data', async () => {
     await addSnapshot(makeSnapshot({ pageName: 'page1' }), 50);
     await addSnapshot(makeSnapshot({ pageName: 'page2' }), 50);
+    await clearAllHistory();
+
+    expect(await getSnapshots('page1')).toEqual([]);
+    expect(await getSnapshots('page2')).toEqual([]);
+    expect(await getIndex()).toEqual({});
+  });
+
+  it('removes history files even when the index is stale', async () => {
+    const first = makeSnapshot({ id: 'snapshot-1', pageName: 'page1' });
+    const second = makeSnapshot({ id: 'snapshot-2', pageName: 'page2' });
+
+    await addSnapshot(first, 50);
+    await addSnapshot(second, 50);
+    await mockFileStorage.setItem('history/_index.json', JSON.stringify({
+      page1: [{ id: first.id, timestamp: first.timestamp }],
+    }));
+
     await clearAllHistory();
 
     expect(await getSnapshots('page1')).toEqual([]);

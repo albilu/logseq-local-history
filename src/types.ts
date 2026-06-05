@@ -19,7 +19,7 @@ export interface HistoryIndexEntry {
 }
 
 export interface HistoryIndex {
-  [sanitizedPageName: string]: HistoryIndexEntry[];
+  [pageName: string]: HistoryIndexEntry[];
 }
 
 export interface PluginSettings {

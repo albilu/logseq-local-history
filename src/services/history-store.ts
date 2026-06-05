@@ -2,9 +2,13 @@ import type { HistoryIndex, PageSnapshot } from '../types';
 import { sanitizePageName } from '../utils';
 
 const INDEX_KEY = 'history/_index.json';
+const FILE_KEYS_KEY = 'history/_files.json';
 
 function storageKey(pageName: string): string {
-  return `history/${sanitizePageName(pageName)}.json`;
+  const safeName = sanitizePageName(pageName);
+  const encodedName = encodeURIComponent(pageName);
+
+  return `history/${safeName}__${encodedName}.json`;
 }
 
 function toIndexEntries(snapshots: PageSnapshot[]) {
@@ -13,6 +17,43 @@ function toIndexEntries(snapshots: PageSnapshot[]) {
 
 async function saveIndex(index: HistoryIndex): Promise<void> {
   await logseq.FileStorage.setItem(INDEX_KEY, JSON.stringify(index));
+}
+
+async function getFileKeys(): Promise<string[]> {
+  try {
+    const hasItem = await logseq.FileStorage.hasItem(FILE_KEYS_KEY);
+    if (!hasItem) {
+      return [];
+    }
+
+    const raw = await logseq.FileStorage.getItem(FILE_KEYS_KEY);
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [];
+  }
+}
+
+async function saveFileKeys(fileKeys: string[]): Promise<void> {
+  await logseq.FileStorage.setItem(FILE_KEYS_KEY, JSON.stringify(fileKeys));
+}
+
+async function addFileKey(fileKey: string): Promise<void> {
+  const fileKeys = await getFileKeys();
+  if (!fileKeys.includes(fileKey)) {
+    fileKeys.push(fileKey);
+    await saveFileKeys(fileKeys);
+  }
+}
+
+async function removeFileKey(fileKey: string): Promise<void> {
+  const fileKeys = (await getFileKeys()).filter((key) => key !== fileKey);
+
+  if (fileKeys.length === 0) {
+    await logseq.FileStorage.removeItem(FILE_KEYS_KEY);
+    return;
+  }
+
+  await saveFileKeys(fileKeys);
 }
 
 export async function getIndex(): Promise<HistoryIndex> {
@@ -46,6 +87,7 @@ export async function getSnapshots(pageName: string): Promise<PageSnapshot[]> {
 }
 
 export async function addSnapshot(snapshot: PageSnapshot, maxVersions: number): Promise<void> {
+  const fileKey = storageKey(snapshot.pageName);
   const snapshots = await getSnapshots(snapshot.pageName);
   snapshots.push(snapshot);
 
@@ -53,46 +95,60 @@ export async function addSnapshot(snapshot: PageSnapshot, maxVersions: number): 
     snapshots.shift();
   }
 
-  await logseq.FileStorage.setItem(storageKey(snapshot.pageName), JSON.stringify(snapshots));
+  await logseq.FileStorage.setItem(fileKey, JSON.stringify(snapshots));
+  await addFileKey(fileKey);
 
   const index = await getIndex();
-  index[sanitizePageName(snapshot.pageName)] = toIndexEntries(snapshots);
+  index[snapshot.pageName] = toIndexEntries(snapshots);
   await saveIndex(index);
 }
 
 export async function deleteSnapshot(pageName: string, snapshotId: string): Promise<void> {
+  const fileKey = storageKey(pageName);
   const filteredSnapshots = (await getSnapshots(pageName)).filter((snapshot) => snapshot.id !== snapshotId);
-  const sanitizedPageName = sanitizePageName(pageName);
 
   if (filteredSnapshots.length === 0) {
-    await logseq.FileStorage.removeItem(storageKey(pageName));
+    await logseq.FileStorage.removeItem(fileKey);
+    await removeFileKey(fileKey);
   } else {
-    await logseq.FileStorage.setItem(storageKey(pageName), JSON.stringify(filteredSnapshots));
+    await logseq.FileStorage.setItem(fileKey, JSON.stringify(filteredSnapshots));
   }
 
   const index = await getIndex();
   if (filteredSnapshots.length === 0) {
-    delete index[sanitizedPageName];
+    delete index[pageName];
   } else {
-    index[sanitizedPageName] = toIndexEntries(filteredSnapshots);
+    index[pageName] = toIndexEntries(filteredSnapshots);
   }
   await saveIndex(index);
 }
 
 export async function clearHistory(pageName: string): Promise<void> {
-  await logseq.FileStorage.removeItem(storageKey(pageName));
+  const fileKey = storageKey(pageName);
+
+  await logseq.FileStorage.removeItem(fileKey);
+  await removeFileKey(fileKey);
 
   const index = await getIndex();
-  delete index[sanitizePageName(pageName)];
+  delete index[pageName];
   await saveIndex(index);
 }
 
 export async function clearAllHistory(): Promise<void> {
   const index = await getIndex();
+  const fileKeys = await getFileKeys();
 
-  for (const sanitizedPageName of Object.keys(index)) {
-    await logseq.FileStorage.removeItem(`history/${sanitizedPageName}.json`);
+  for (const pageName of Object.keys(index)) {
+    const fileKey = storageKey(pageName);
+    if (!fileKeys.includes(fileKey)) {
+      fileKeys.push(fileKey);
+    }
+  }
+
+  for (const fileKey of fileKeys) {
+    await logseq.FileStorage.removeItem(fileKey);
   }
 
   await logseq.FileStorage.removeItem(INDEX_KEY);
+  await logseq.FileStorage.removeItem(FILE_KEYS_KEY);
 }
