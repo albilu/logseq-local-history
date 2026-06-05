@@ -16,15 +16,28 @@ type DbChangedData = {
 };
 
 type TimerMap = Map<string, ReturnType<typeof setTimeout>>;
+type CaptureMap = Map<string, Promise<void>>;
+type PageDatom = [unknown, unknown, unknown, unknown];
 
 let timers: TimerMap = new Map();
 let lastSnapshots = new Map<string, SerializedBlock[]>();
+let captureQueue: CaptureMap = new Map();
+let generation = 0;
 
-function getPageNamesFromTxData(txData: unknown[]): string[] {
+function isCurrentGeneration(currentGeneration: number): boolean {
+  return generation === currentGeneration;
+}
+
+function isPageDatom(entry: unknown): entry is PageDatom {
+  return Array.isArray(entry) && entry.length >= 4;
+}
+
+async function getPageNamesFromTxData(txData: unknown[]): Promise<string[]> {
   const pageNames = new Set<string>();
+  const pageRefs = new Set<string | number>();
 
   for (const entry of txData) {
-    if (!Array.isArray(entry) || entry.length < 4) {
+    if (!isPageDatom(entry)) {
       continue;
     }
 
@@ -32,16 +45,32 @@ function getPageNamesFromTxData(txData: unknown[]): string[] {
     const value = entry[3];
     if ((attribute === ':block/name' || attribute === ':block/original-name') && typeof value === 'string') {
       pageNames.add(value);
+      continue;
+    }
+
+    if (attribute === ':block/page' && (typeof value === 'string' || typeof value === 'number')) {
+      pageRefs.add(value);
+    }
+  }
+
+  for (const pageRef of pageRefs) {
+    const page = await logseq.Editor.getPage(pageRef);
+    if (typeof page?.name === 'string') {
+      pageNames.add(page.name);
     }
   }
 
   return [...pageNames];
 }
 
-async function captureSnapshot(pageName: string, maxVersions: number): Promise<void> {
+async function captureSnapshot(pageName: string, maxVersions: number, currentGeneration: number): Promise<void> {
   try {
+    if (!isCurrentGeneration(currentGeneration)) {
+      return;
+    }
+
     const blocks = await logseq.Editor.getPageBlocksTree(pageName);
-    if (!Array.isArray(blocks) || blocks.length === 0) {
+    if (!isCurrentGeneration(currentGeneration) || !Array.isArray(blocks) || blocks.length === 0) {
       return;
     }
 
@@ -54,11 +83,17 @@ async function captureSnapshot(pageName: string, maxVersions: number): Promise<v
     const storedSnapshots = await getSnapshots(pageName);
     const lastStoredSnapshot = storedSnapshots[storedSnapshots.length - 1];
     if (lastStoredSnapshot && areSnapshotsEqual(lastStoredSnapshot.blocks, serialized)) {
-      lastSnapshots.set(pageName, serialized);
+      if (isCurrentGeneration(currentGeneration)) {
+        lastSnapshots.set(pageName, serialized);
+      }
       return;
     }
 
     const page = await logseq.Editor.getPage(pageName);
+    if (!isCurrentGeneration(currentGeneration)) {
+      return;
+    }
+
     const snapshot: PageSnapshot = {
       id: crypto.randomUUID(),
       pageName,
@@ -68,22 +103,30 @@ async function captureSnapshot(pageName: string, maxVersions: number): Promise<v
     };
 
     await addSnapshot(snapshot, maxVersions);
-    lastSnapshots.set(pageName, serialized);
+    if (isCurrentGeneration(currentGeneration)) {
+      lastSnapshots.set(pageName, serialized);
+    }
   } catch (error) {
     console.error(`Failed to capture snapshot for "${pageName}"`, error);
   }
 }
 
-export function resetState(): void {
-  for (const timer of timers.values()) {
-    clearTimeout(timer);
-  }
+function queueCapture(pageName: string, maxVersions: number, currentGeneration: number): void {
+  const previousCapture = captureQueue.get(pageName) ?? Promise.resolve();
+  const nextCapture = previousCapture
+    .catch(() => undefined)
+    .then(() => captureSnapshot(pageName, maxVersions, currentGeneration));
 
-  timers.clear();
-  lastSnapshots.clear();
+  captureQueue.set(pageName, nextCapture);
+
+  void nextCapture.finally(() => {
+    if (captureQueue.get(pageName) === nextCapture) {
+      captureQueue.delete(pageName);
+    }
+  });
 }
 
-export function handleDbChanged(data: DbChangedData, settings: PluginSettings): void {
+async function collectAffectedPages(data: DbChangedData, settings: PluginSettings, currentGeneration: number): Promise<Set<string>> {
   const excludedPages = parseExcludePages(settings.excludePages);
   const affectedPages = new Set<string>();
 
@@ -100,7 +143,12 @@ export function handleDbChanged(data: DbChangedData, settings: PluginSettings): 
     affectedPages.add(pageName);
   }
 
-  for (const pageName of getPageNamesFromTxData(data.txData)) {
+  const txPageNames = await getPageNamesFromTxData(data.txData);
+  if (!isCurrentGeneration(currentGeneration)) {
+    return new Set();
+  }
+
+  for (const pageName of txPageNames) {
     if (excludedPages.includes(pageName.toLowerCase())) {
       continue;
     }
@@ -108,17 +156,41 @@ export function handleDbChanged(data: DbChangedData, settings: PluginSettings): 
     affectedPages.add(pageName);
   }
 
-  for (const pageName of affectedPages) {
-    const existingTimer = timers.get(pageName);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
+  return affectedPages;
+}
+
+export function resetState(): void {
+  generation += 1;
+
+  for (const timer of timers.values()) {
+    clearTimeout(timer);
+  }
+
+  timers.clear();
+  lastSnapshots.clear();
+  captureQueue.clear();
+}
+
+export function handleDbChanged(data: DbChangedData, settings: PluginSettings): void {
+  const currentGeneration = generation;
+
+  void collectAffectedPages(data, settings, currentGeneration).then((affectedPages) => {
+    if (!isCurrentGeneration(currentGeneration)) {
+      return;
     }
 
-    const timer = setTimeout(() => {
-      timers.delete(pageName);
-      void captureSnapshot(pageName, settings.maxVersions);
-    }, settings.debounceMs);
+    for (const pageName of affectedPages) {
+      const existingTimer = timers.get(pageName);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+      }
 
-    timers.set(pageName, timer);
-  }
+      const timer = setTimeout(() => {
+        timers.delete(pageName);
+        queueCapture(pageName, settings.maxVersions, currentGeneration);
+      }, settings.debounceMs);
+
+      timers.set(pageName, timer);
+    }
+  });
 }

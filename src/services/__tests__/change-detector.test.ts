@@ -27,6 +27,11 @@ function makeChange(blocks: ChangedBlock[]) {
   return { blocks, txData: [] as unknown[] };
 }
 
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 beforeEach(() => {
   installMockLogseq();
   resetMockLogseq();
@@ -140,6 +145,35 @@ describe('handleDbChanged', () => {
     expect(await getSnapshots('test page')).toHaveLength(1);
   });
 
+  it('resolves affected page names from block page datoms in txData', async () => {
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      { uuid: 'b1', content: 'Hello', children: [] },
+    ]);
+    mockEditor.getPage.mockImplementation(async (pageRef: string) => {
+      if (pageRef === 'page-entity-1') {
+        return { uuid: 'page-uuid', name: 'tx page' };
+      }
+
+      return { uuid: 'page-uuid', name: 'tx page' };
+    });
+
+    handleDbChanged(
+      {
+        blocks: [{ uuid: 'b1' }],
+        txData: [
+          [':db/add', 'block-1', ':block/page', 'page-entity-1'],
+        ],
+      },
+      defaultSettings
+    );
+
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(mockEditor.getPageBlocksTree).toHaveBeenCalledWith('tx page');
+    expect(await getSnapshots('tx page')).toHaveLength(1);
+  });
+
   it('does not store a duplicate when the last stored snapshot matches', async () => {
     const existing = makeSnapshot({
       pageName: 'test page',
@@ -178,6 +212,31 @@ describe('handleDbChanged', () => {
     expect(await getSnapshots('test page')).toHaveLength(1);
     expect(mockEditor.getPage).toHaveBeenCalledTimes(1);
   });
+
+  it('serializes overlapping captures for the same page', async () => {
+    const pageResolvers: Array<(value: { uuid: string; name: string }) => void> = [];
+
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      { uuid: 'b1', content: 'Hello', children: [] },
+    ]);
+    mockEditor.getPage.mockImplementation(() => new Promise((resolve) => {
+      pageResolvers.push(resolve);
+    }));
+
+    handleDbChanged(makeChange([{ uuid: 'b1', page: { name: 'test page' } }]), { ...defaultSettings, debounceMs: 1 });
+    await vi.advanceTimersByTimeAsync(1);
+
+    handleDbChanged(makeChange([{ uuid: 'b1', page: { name: 'test page' } }]), { ...defaultSettings, debounceMs: 1 });
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(mockEditor.getPage).toHaveBeenCalledTimes(1);
+
+    pageResolvers[0]({ uuid: 'page-uuid', name: 'test page' });
+    await flushMicrotasks();
+
+    expect(mockEditor.getPage).toHaveBeenCalledTimes(1);
+    expect(await getSnapshots('test page')).toHaveLength(1);
+  });
 });
 
 describe('resetState', () => {
@@ -190,5 +249,31 @@ describe('resetState', () => {
     await vi.advanceTimersByTimeAsync(10000);
 
     expect(mockEditor.getPageBlocksTree).not.toHaveBeenCalled();
+  });
+
+  it('invalidates already-started captures', async () => {
+    let resolvePage: ((value: { uuid: string; name: string }) => void) | undefined;
+
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      { uuid: 'b1', content: 'Hello', children: [] },
+    ]);
+    mockEditor.getPage.mockImplementationOnce(() => new Promise((resolve) => {
+      resolvePage = resolve;
+    }));
+    mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
+
+    handleDbChanged(makeChange([{ uuid: 'b1', page: { name: 'test page' } }]), { ...defaultSettings, debounceMs: 1 });
+    await vi.advanceTimersByTimeAsync(1);
+
+    resetState();
+    resolvePage?.({ uuid: 'page-uuid', name: 'test page' });
+    await flushMicrotasks();
+
+    expect(await getSnapshots('test page')).toEqual([]);
+
+    handleDbChanged(makeChange([{ uuid: 'b1', page: { name: 'test page' } }]), { ...defaultSettings, debounceMs: 1 });
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(await getSnapshots('test page')).toHaveLength(1);
   });
 });
