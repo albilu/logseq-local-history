@@ -54,9 +54,13 @@ async function getPageNamesFromTxData(txData: unknown[]): Promise<string[]> {
   }
 
   for (const pageRef of pageRefs) {
-    const page = await logseq.Editor.getPage(pageRef);
-    if (typeof page?.name === 'string') {
-      pageNames.add(page.name);
+    try {
+      const page = await logseq.Editor.getPage(pageRef);
+      if (typeof page?.name === 'string') {
+        pageNames.add(page.name);
+      }
+    } catch (error) {
+      console.error(`Failed to resolve page from txData for "${String(pageRef)}"`, error);
     }
   }
 
@@ -173,29 +177,32 @@ export function resetState(): void {
 
   timers.clear();
   lastSnapshots.clear();
-  captureQueue.clear();
 }
 
 export function handleDbChanged(data: DbChangedData, settings: PluginSettings): void {
   const currentGeneration = generation;
 
-  void collectAffectedPages(data, settings, currentGeneration).then((affectedPages) => {
-    if (!isCurrentGeneration(currentGeneration)) {
-      return;
-    }
-
-    for (const pageName of affectedPages) {
-      const existingTimer = timers.get(pageName);
-      if (existingTimer) {
-        clearTimeout(existingTimer);
+  void collectAffectedPages(data, settings, currentGeneration)
+    .then((affectedPages) => {
+      if (!isCurrentGeneration(currentGeneration)) {
+        return;
       }
 
-      const timer = setTimeout(() => {
-        timers.delete(pageName);
-        queueCapture(pageName, settings.maxVersions, currentGeneration);
-      }, settings.debounceMs);
+      for (const pageName of affectedPages) {
+        const existingTimer = timers.get(pageName);
+        if (existingTimer) {
+          clearTimeout(existingTimer);
+        }
 
-      timers.set(pageName, timer);
-    }
-  });
+        const timer = setTimeout(() => {
+          timers.delete(pageName);
+          queueCapture(pageName, settings.maxVersions, currentGeneration);
+        }, settings.debounceMs);
+
+        timers.set(pageName, timer);
+      }
+    })
+    .catch((error) => {
+      console.error('Failed to collect affected pages from change event', error);
+    });
 }

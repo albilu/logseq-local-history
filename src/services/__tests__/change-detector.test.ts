@@ -69,6 +69,18 @@ async function waitForHistoryFileRemoval(): Promise<void> {
   ))).toBe(true);
 }
 
+async function waitForCallCount(mockFn: { mock: { calls: unknown[][] } }, expectedCount: number): Promise<void> {
+  for (let index = 0; index < 20; index += 1) {
+    if (mockFn.mock.calls.length === expectedCount) {
+      return;
+    }
+
+    await flushMicrotasks();
+  }
+
+  expect(mockFn.mock.calls.length).toBe(expectedCount);
+}
+
 beforeEach(() => {
   installMockLogseq();
   resetMockLogseq();
@@ -274,6 +286,46 @@ describe('handleDbChanged', () => {
     expect(mockEditor.getPage).toHaveBeenCalledTimes(1);
     expect(await getSnapshots('test page')).toHaveLength(1);
   });
+
+  it('continues processing block-derived pages when txData page lookup fails', async () => {
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+
+    process.on('unhandledRejection', onUnhandledRejection);
+
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      { uuid: 'b1', content: 'Hello', children: [] },
+    ]);
+    mockEditor.getPage.mockImplementation(async (pageRef: string) => {
+      if (pageRef === 'missing-page-ref') {
+        throw new Error('lookup failed');
+      }
+
+      return { uuid: 'page-uuid', name: 'test page' };
+    });
+
+    handleDbChanged(
+      {
+        blocks: [{ uuid: 'b1', page: { name: 'test page' } }],
+        txData: [
+          [':db/add', 'block-1', ':block/page', 'missing-page-ref'],
+        ],
+      },
+      defaultSettings
+    );
+
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(5000);
+    await flushMicrotasks();
+
+    process.off('unhandledRejection', onUnhandledRejection);
+
+    expect(mockEditor.getPageBlocksTree).toHaveBeenCalledWith('test page');
+    expect(await getSnapshots('test page')).toHaveLength(1);
+    expect(unhandledRejections).toEqual([]);
+  });
 });
 
 describe('resetState', () => {
@@ -346,5 +398,50 @@ describe('resetState', () => {
     await waitForHistoryFileRemoval();
 
     expect(await getSnapshots('test page')).toEqual([]);
+  });
+
+  it('keeps same-page captures serialized across reset generations', async () => {
+    let resolveOldWrite: (() => void) | undefined;
+    const originalSetItem = mockFileStorage.setItem.getMockImplementation();
+
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      { uuid: 'b1', content: 'updated', children: [] },
+    ]);
+    mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
+    mockFileStorage.setItem.mockImplementation(async (key: string, value: string) => {
+      if (
+        key.startsWith('history/')
+        && key.endsWith('.json')
+        && key !== 'history/_index.json'
+        && key !== 'history/_files.json'
+        && !resolveOldWrite
+      ) {
+        await new Promise<void>((resolve) => {
+          resolveOldWrite = resolve;
+        });
+      }
+
+      await originalSetItem?.(key, value);
+    });
+
+    handleDbChanged(makeChange([{ uuid: 'b1', page: { name: 'test page' } }]), { ...defaultSettings, debounceMs: 1 });
+    await vi.advanceTimersByTimeAsync(1);
+    await flushMicrotasks();
+
+    resetState();
+    handleDbChanged(makeChange([{ uuid: 'b1', page: { name: 'test page' } }]), { ...defaultSettings, debounceMs: 1 });
+    await vi.advanceTimersByTimeAsync(1);
+    await flushMicrotasks();
+
+    expect(mockEditor.getPage).toHaveBeenCalledTimes(1);
+
+    resolveOldWrite?.();
+    await waitForHistoryFileRemoval();
+    await waitForCallCount(mockEditor.getPage, 2);
+    await waitForSnapshots('test page', 1);
+
+    expect(mockEditor.getPage).toHaveBeenCalledTimes(2);
+    expect(await getSnapshots('test page')).toHaveLength(1);
+    expect((await getSnapshots('test page'))[0].blocks).toEqual([{ uuid: 'b1', content: 'updated' }]);
   });
 });
