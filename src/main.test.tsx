@@ -53,26 +53,36 @@ describe('plugin bootstrap', () => {
 
     expect(mockLogseq.useSettingsSchema).toHaveBeenCalledTimes(1);
     expect(mockLogseq.App.registerUIItem).toHaveBeenCalledWith('toolbar', expect.objectContaining({
-      key: 'logseq-local-history-toolbar',
-      template: expect.stringContaining('data-on-click="showLocalHistory"'),
+      key: 'show-local-history',
+      template: expect.stringMatching(/data-on-click="toggleHistory"[\s\S]*title="Local History"|title="Local History"[\s\S]*data-on-click="toggleHistory"/),
     }));
     expect(mockLogseq.App.registerCommandPalette).toHaveBeenCalledWith(expect.objectContaining({
-      key: 'logseq-local-history-open',
-      label: 'Open local history',
+      key: 'show-local-history',
+      label: 'Show Local History',
+      keybinding: expect.objectContaining({
+        binding: 'mod+shift+l',
+      }),
     }), expect.any(Function));
-    expect(mockLogseq.App.registerCommandShortcut).toHaveBeenCalledWith('mod+shift+h', expect.any(Function), expect.objectContaining({
-      key: 'logseq-local-history-open-shortcut',
-      label: 'Open local history',
+    expect(mockLogseq.App.registerCommandShortcut).toHaveBeenCalledWith('mod+shift+l', expect.any(Function), expect.objectContaining({
+      key: 'show-local-history-shortcut',
+      label: 'Show Local History',
     }));
-    expect(mockLogseq.setMainUIInlineStyle).toHaveBeenCalledTimes(1);
+    expect(mockLogseq.setMainUIInlineStyle).toHaveBeenCalledWith({
+      position: 'fixed',
+      top: '0',
+      right: '0',
+      bottom: '0',
+      width: '300px',
+      zIndex: 999,
+    });
     expect(mockLogseq.DB.onChanged).toHaveBeenCalledTimes(1);
     expect(mockLogseq.App.onCurrentGraphChanged).toHaveBeenCalledTimes(1);
     expect(mockLogseq.beforeunload).toHaveBeenCalledTimes(1);
     expect(createRootMock).toHaveBeenCalledWith(appElement);
     expect(renderMock).toHaveBeenCalledTimes(1);
 
-    const model = mockLogseq.provideModel.mock.calls[0]?.[0] as { showLocalHistory: () => void };
-    model.showLocalHistory();
+    const model = mockLogseq.provideModel.mock.calls[0]?.[0] as { toggleHistory: () => void };
+    model.toggleHistory();
     expect(mockLogseq.showMainUI).toHaveBeenCalledWith({ autoFocus: true });
 
     const dbChangedHandler = mockLogseq.DB.onChanged.mock.calls[0]?.[0] as (data: unknown) => void;

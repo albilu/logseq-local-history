@@ -53,13 +53,13 @@ function showLocalHistory(): void {
 async function main(): Promise<void> {
   logseq.useSettingsSchema([...SETTINGS_SCHEMA]);
   logseq.provideModel({
-    showLocalHistory,
+    toggleHistory: showLocalHistory,
   });
 
   logseq.App.registerUIItem('toolbar', {
-    key: 'logseq-local-history-toolbar',
+    key: 'show-local-history',
     template: `
-      <a class="button" data-on-click="showLocalHistory" title="Open local history">
+      <a class="button" data-on-click="toggleHistory" title="Local History">
         <span class="ti ti-history"></span>
       </a>
     `,
@@ -67,28 +67,27 @@ async function main(): Promise<void> {
 
   logseq.App.registerCommandPalette(
     {
-      key: 'logseq-local-history-open',
-      label: 'Open local history',
+      key: 'show-local-history',
+      label: 'Show Local History',
       keybinding: {
-        mode: 'global',
-        binding: 'mod+shift+h',
+        binding: 'mod+shift+l',
       },
     },
     showLocalHistory
   );
 
-  logseq.App.registerCommandShortcut('mod+shift+h', showLocalHistory, {
-    key: 'logseq-local-history-open-shortcut',
-    label: 'Open local history',
+  logseq.App.registerCommandShortcut('mod+shift+l', showLocalHistory, {
+    key: 'show-local-history-shortcut',
+    label: 'Show Local History',
   });
 
   logseq.setMainUIInlineStyle({
     position: 'fixed',
-    right: '1rem',
-    top: '3.5rem',
-    width: 'min(720px, calc(100vw - 2rem))',
-    height: 'min(80vh, 640px)',
-    zIndex: 11,
+    top: '0',
+    right: '0',
+    bottom: '0',
+    width: '300px',
+    zIndex: 999,
   });
 
   logseq.DB.onChanged((data) => {
