@@ -15,7 +15,8 @@ export async function revertToSnapshot(
   snapshot: PageSnapshot,
   maxVersions: number = 50
 ): Promise<void> {
-  const currentBlocks = await logseq.Editor.getCurrentPageBlocksTree();
+  const existingBlocks = await logseq.Editor.getPageBlocksTree(snapshot.pageName);
+  const currentBlocks = Array.isArray(existingBlocks) ? existingBlocks : [];
 
   if (currentBlocks.length > 0) {
     const page = await logseq.Editor.getPage(snapshot.pageName);
@@ -46,13 +47,17 @@ export async function revertToSnapshot(
     properties: firstBlock.properties ?? {},
   });
 
-  if (insertedFirstBlock && firstBlock.children && firstBlock.children.length > 0) {
+  if (!insertedFirstBlock) {
+    throw new Error(`Failed to restore first root block for page "${snapshot.pageName}"`);
+  }
+
+  if (firstBlock.children && firstBlock.children.length > 0) {
     await logseq.Editor.insertBatchBlock(insertedFirstBlock.uuid, toBatchBlocks(firstBlock.children), {
       sibling: false,
     });
   }
 
-  if (insertedFirstBlock && remainingBlocks.length > 0) {
+  if (remainingBlocks.length > 0) {
     await logseq.Editor.insertBatchBlock(insertedFirstBlock.uuid, toBatchBlocks(remainingBlocks), {
       sibling: true,
     });

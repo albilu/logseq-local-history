@@ -30,7 +30,7 @@ const targetSnapshot: PageSnapshot = {
 
 describe('revertToSnapshot', () => {
   it('removes existing blocks and inserts snapshot blocks', async () => {
-    mockEditor.getCurrentPageBlocksTree.mockResolvedValue([
+    mockEditor.getPageBlocksTree.mockResolvedValue([
       { uuid: 'cur-b1', content: 'Current', children: [] },
       { uuid: 'cur-b2', content: 'Current 2', children: [] },
     ]);
@@ -60,7 +60,7 @@ describe('revertToSnapshot', () => {
   });
 
   it('creates a pre-revert snapshot for safety', async () => {
-    mockEditor.getCurrentPageBlocksTree.mockResolvedValue([
+    mockEditor.getPageBlocksTree.mockResolvedValue([
       { uuid: 'cur-b1', content: 'Current', children: [] },
     ]);
     mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
@@ -71,5 +71,56 @@ describe('revertToSnapshot', () => {
     await revertToSnapshot(targetSnapshot);
 
     expect(mockFileStorage.setItem).toHaveBeenCalled();
+  });
+
+  it('backs up and restores the snapshot page even when another page is current', async () => {
+    mockEditor.getCurrentPageBlocksTree.mockResolvedValue([
+      { uuid: 'other-b1', content: 'Other page block', children: [] },
+    ]);
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      { uuid: 'target-b1', content: 'Target page block', children: [] },
+    ]);
+    mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
+    mockEditor.removeBlock.mockResolvedValue(undefined);
+    mockEditor.appendBlockInPage.mockResolvedValue({ uuid: 'new-b1' });
+    mockEditor.insertBatchBlock.mockResolvedValue([]);
+
+    await revertToSnapshot(targetSnapshot);
+
+    expect(mockEditor.getPageBlocksTree).toHaveBeenCalledWith('test page');
+    expect(mockEditor.removeBlock).toHaveBeenCalledWith('target-b1');
+    expect(mockEditor.removeBlock).not.toHaveBeenCalledWith('other-b1');
+
+    const pageHistoryWrites = mockFileStorage.setItem.mock.calls
+      .filter(([key]) => key.startsWith('history/') && key.endsWith('.json'));
+      
+    const snapshotWrites = pageHistoryWrites.filter(([key]) => (
+      key !== 'history/_index.json' && key !== 'history/_files.json'
+    ));
+    expect(snapshotWrites).toHaveLength(1);
+
+    const [latestWrite] = snapshotWrites;
+    const [, latestSnapshotsJson] = latestWrite;
+    expect(JSON.parse(latestSnapshotsJson as string)[0].blocks).toEqual([
+      { uuid: 'target-b1', content: 'Target page block' },
+    ]);
+  });
+
+  it('fails when the first block cannot be reinserted after deletion', async () => {
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      { uuid: 'target-b1', content: 'Target page block', children: [] },
+    ]);
+    mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
+    mockEditor.removeBlock.mockResolvedValue(undefined);
+    mockEditor.appendBlockInPage.mockResolvedValue(null);
+
+    await expect(revertToSnapshot(targetSnapshot)).rejects.toThrow(
+      'Failed to restore first root block for page "test page"'
+    );
+
+    expect(mockUI.showMsg).not.toHaveBeenCalledWith(
+      expect.stringContaining('Reverted'),
+      'success'
+    );
   });
 });
