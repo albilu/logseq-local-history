@@ -11,6 +11,10 @@ function toBatchBlocks(blocks: SerializedBlock[]): IBatchBlock[] {
   }));
 }
 
+function hasInsertedBlocks(result: unknown): boolean {
+  return Array.isArray(result) && result.length > 0;
+}
+
 async function replacePageBlocks(pageName: string, blocks: SerializedBlock[]): Promise<void> {
   const existingBlocks = await logseq.Editor.getPageBlocksTree(pageName);
   const currentBlocks = Array.isArray(existingBlocks) ? existingBlocks : [];
@@ -33,15 +37,23 @@ async function replacePageBlocks(pageName: string, blocks: SerializedBlock[]): P
   }
 
   if (firstBlock.children && firstBlock.children.length > 0) {
-    await logseq.Editor.insertBatchBlock(insertedFirstBlock.uuid, toBatchBlocks(firstBlock.children), {
+    const insertedChildren = await logseq.Editor.insertBatchBlock(insertedFirstBlock.uuid, toBatchBlocks(firstBlock.children), {
       sibling: false,
     });
+
+    if (!hasInsertedBlocks(insertedChildren)) {
+      throw new Error(`Failed to restore child blocks for page "${pageName}"`);
+    }
   }
 
   if (remainingBlocks.length > 0) {
-    await logseq.Editor.insertBatchBlock(insertedFirstBlock.uuid, toBatchBlocks(remainingBlocks), {
+    const insertedRemainingBlocks = await logseq.Editor.insertBatchBlock(insertedFirstBlock.uuid, toBatchBlocks(remainingBlocks), {
       sibling: true,
     });
+
+    if (!hasInsertedBlocks(insertedRemainingBlocks)) {
+      throw new Error(`Failed to restore remaining root blocks for page "${pageName}"`);
+    }
   }
 }
 
