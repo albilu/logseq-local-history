@@ -123,4 +123,45 @@ describe('revertToSnapshot', () => {
       'success'
     );
   });
+
+  it('restores the backup blocks when batch insertion fails after the first append', async () => {
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      {
+        uuid: 'backup-b1',
+        content: 'Backup root',
+        children: [{ uuid: 'backup-b2', content: 'Backup child' }],
+      },
+    ]);
+    mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
+    mockEditor.removeBlock.mockResolvedValue(undefined);
+    mockEditor.appendBlockInPage
+      .mockResolvedValueOnce({ uuid: 'new-target-root' })
+      .mockResolvedValueOnce({ uuid: 'restored-backup-root' });
+    mockEditor.insertBatchBlock.mockRejectedValueOnce(new Error('batch insert failed'));
+
+    await expect(revertToSnapshot(targetSnapshot)).rejects.toThrow('batch insert failed');
+
+    expect(mockEditor.appendBlockInPage).toHaveBeenNthCalledWith(
+      1,
+      'test page',
+      'Old content',
+      expect.any(Object)
+    );
+    expect(mockEditor.appendBlockInPage).toHaveBeenNthCalledWith(
+      2,
+      'test page',
+      'Backup root',
+      expect.any(Object)
+    );
+    expect(mockEditor.insertBatchBlock).toHaveBeenNthCalledWith(
+      2,
+      'restored-backup-root',
+      [{ content: 'Backup child', properties: {}, children: [] }],
+      { sibling: false }
+    );
+    expect(mockUI.showMsg).not.toHaveBeenCalledWith(
+      expect.stringContaining('Reverted'),
+      'success'
+    );
+  });
 });
