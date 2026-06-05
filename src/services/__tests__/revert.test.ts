@@ -28,6 +28,23 @@ const targetSnapshot: PageSnapshot = {
   ],
 };
 
+const multiRootSnapshot: PageSnapshot = {
+  id: 'snap-2',
+  pageName: 'test page',
+  pageUuid: 'page-uuid',
+  timestamp: 2000,
+  blocks: [
+    {
+      uuid: 'root-a',
+      content: 'Root A',
+    },
+    {
+      uuid: 'root-b',
+      content: 'Root B',
+    },
+  ],
+};
+
 describe('revertToSnapshot', () => {
   it('removes existing blocks and inserts snapshot blocks', async () => {
     mockEditor.getPageBlocksTree.mockResolvedValue([
@@ -190,6 +207,51 @@ describe('revertToSnapshot', () => {
       'Failed to restore child blocks for page "test page"'
     );
 
+    expect(mockEditor.appendBlockInPage).toHaveBeenNthCalledWith(
+      2,
+      'test page',
+      'Backup root',
+      expect.any(Object)
+    );
+    expect(mockEditor.insertBatchBlock).toHaveBeenNthCalledWith(
+      2,
+      'restored-backup-root',
+      [{ content: 'Backup child', properties: {}, children: [] }],
+      { sibling: false }
+    );
+    expect(mockUI.showMsg).not.toHaveBeenCalledWith(
+      expect.stringContaining('Reverted'),
+      'success'
+    );
+  });
+
+  it('treats an empty remaining-root insert result as failure and restores the backup blocks', async () => {
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      {
+        uuid: 'backup-b1',
+        content: 'Backup root',
+        children: [{ uuid: 'backup-b2', content: 'Backup child' }],
+      },
+    ]);
+    mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
+    mockEditor.removeBlock.mockResolvedValue(undefined);
+    mockEditor.appendBlockInPage
+      .mockResolvedValueOnce({ uuid: 'new-target-root' })
+      .mockResolvedValueOnce({ uuid: 'restored-backup-root' });
+    mockEditor.insertBatchBlock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ uuid: 'restored-backup-child' }]);
+
+    await expect(revertToSnapshot(multiRootSnapshot)).rejects.toThrow(
+      'Failed to restore remaining root blocks for page "test page"'
+    );
+
+    expect(mockEditor.insertBatchBlock).toHaveBeenNthCalledWith(
+      1,
+      'new-target-root',
+      [{ content: 'Root B', properties: {}, children: [] }],
+      { sibling: true }
+    );
     expect(mockEditor.appendBlockInPage).toHaveBeenNthCalledWith(
       2,
       'test page',
