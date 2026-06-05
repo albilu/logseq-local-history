@@ -1,7 +1,7 @@
 export interface SerializedBlock {
   uuid: string;
   content: string;
-  properties?: Record<string, any>;
+  properties?: Record<string, unknown>;
   children?: SerializedBlock[];
 }
 
