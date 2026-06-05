@@ -20,6 +20,24 @@ type TimerMap = Map<string, ReturnType<typeof setTimeout>>;
 let timers: TimerMap = new Map();
 let lastSnapshots = new Map<string, SerializedBlock[]>();
 
+function getPageNamesFromTxData(txData: unknown[]): string[] {
+  const pageNames = new Set<string>();
+
+  for (const entry of txData) {
+    if (!Array.isArray(entry) || entry.length < 4) {
+      continue;
+    }
+
+    const attribute = entry[2];
+    const value = entry[3];
+    if ((attribute === ':block/name' || attribute === ':block/original-name') && typeof value === 'string') {
+      pageNames.add(value);
+    }
+  }
+
+  return [...pageNames];
+}
+
 async function captureSnapshot(pageName: string, maxVersions: number): Promise<void> {
   try {
     const blocks = await logseq.Editor.getPageBlocksTree(pageName);
@@ -75,6 +93,14 @@ export function handleDbChanged(data: DbChangedData, settings: PluginSettings): 
       continue;
     }
 
+    if (excludedPages.includes(pageName.toLowerCase())) {
+      continue;
+    }
+
+    affectedPages.add(pageName);
+  }
+
+  for (const pageName of getPageNamesFromTxData(data.txData)) {
     if (excludedPages.includes(pageName.toLowerCase())) {
       continue;
     }
