@@ -6,7 +6,7 @@ const FILE_KEYS_KEY = 'history/_files.json';
 
 function storageKey(pageName: string): string {
   const safeName = sanitizePageName(pageName);
-  const encodedName = encodeURIComponent(pageName);
+  const encodedName = encodeURIComponent(pageName).replace(/\*/g, '%2A');
 
   return `history/${safeName}__${encodedName}.json`;
 }

@@ -110,6 +110,20 @@ describe('addSnapshot', () => {
     expect(index[first.pageName][0].id).toBe(first.id);
     expect(index[second.pageName][0].id).toBe(second.id);
   });
+
+  it('stores special-character page names under a fully filename-safe key', async () => {
+    const snapshot = makeSnapshot({ pageName: 'page:with*special?"chars<>|' });
+
+    await addSnapshot(snapshot, 50);
+
+    const historyFileKeys = mockFileStorage.setItem.mock.calls
+      .map(([key]) => key)
+      .filter((key) => key.startsWith('history/') && key.endsWith('.json'))
+      .filter((key) => key !== 'history/_index.json' && key !== 'history/_files.json');
+
+    expect(historyFileKeys).toHaveLength(1);
+    expect(historyFileKeys[0]).not.toContain('*');
+  });
 });
 
 describe('deleteSnapshot', () => {
