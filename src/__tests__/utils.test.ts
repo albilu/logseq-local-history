@@ -79,6 +79,15 @@ describe('formatRelativeTime', () => {
     const result = formatRelativeTime(Date.now() - 5 * 86400_000);
     expect(result).toBe('5 days ago');
   });
+
+  it('returns a deterministic long date for times 30 days or older', () => {
+    const timestamp = new Date(2026, 3, 1, 9, 15, 0).getTime();
+    const expected = new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'long',
+    }).format(timestamp);
+
+    expect(formatRelativeTime(timestamp)).toBe(expected);
+  });
 });
 
 describe('formatAbsoluteTime', () => {

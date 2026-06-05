@@ -29,7 +29,9 @@ export function formatRelativeTime(timestamp: number): string {
     return `${days} days ago`;
   }
 
-  return new Date(timestamp).toLocaleDateString();
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'long',
+  }).format(timestamp);
 }
 
 export function formatAbsoluteTime(timestamp: number): string {
