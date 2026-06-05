@@ -67,7 +67,21 @@ export function installMockLogseq(): void {
 }
 
 export function resetMockLogseq(): void {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   mockFileStorage.clear();
+  mockFileStorage.hasItem.mockImplementation(async (key: string) => storage.has(key));
+  mockFileStorage.getItem.mockImplementation(async (key: string) => {
+    const value = storage.get(key);
+    if (value === undefined) {
+      throw new Error(`Key not found: ${key}`);
+    }
+    return value;
+  });
+  mockFileStorage.setItem.mockImplementation(async (key: string, value: string) => {
+    storage.set(key, value);
+  });
+  mockFileStorage.removeItem.mockImplementation(async (key: string) => {
+    storage.delete(key);
+  });
   mockLogseq.settings = { maxVersions: 50, debounceMs: 5000, excludePages: '' };
 }
