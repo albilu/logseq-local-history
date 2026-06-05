@@ -118,6 +118,28 @@ describe('handleDbChanged', () => {
     expect(mockEditor.getPageBlocksTree).not.toHaveBeenCalled();
   });
 
+  it('extracts affected page names from txData when blocks lack page info', async () => {
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      { uuid: 'b1', content: 'Hello', children: [] },
+    ]);
+    mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
+
+    handleDbChanged(
+      {
+        blocks: [{ uuid: 'b1' }],
+        txData: [
+          [':db/add', 'datom-1', ':block/name', 'test page'],
+        ],
+      },
+      defaultSettings
+    );
+
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(mockEditor.getPageBlocksTree).toHaveBeenCalledWith('test page');
+    expect(await getSnapshots('test page')).toHaveLength(1);
+  });
+
   it('does not store a duplicate when the last stored snapshot matches', async () => {
     const existing = makeSnapshot({
       pageName: 'test page',
