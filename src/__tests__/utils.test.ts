@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRelativeTime, parseExcludePages, sanitizePageName } from '../utils';
+import { formatAbsoluteTime, formatRelativeTime, parseExcludePages, sanitizePageName } from '../utils';
 
 describe('sanitizePageName', () => {
   it('replaces slashes with underscores', () => {
@@ -78,5 +78,17 @@ describe('formatRelativeTime', () => {
   it('returns "N days ago" for times 2-30 days ago', () => {
     const result = formatRelativeTime(Date.now() - 5 * 86400_000);
     expect(result).toBe('5 days ago');
+  });
+});
+
+describe('formatAbsoluteTime', () => {
+  it('formats timestamps as a long US date with short time for the tooltip', () => {
+    const timestamp = new Date(2026, 5, 5, 16, 23, 0).getTime();
+    const expected = new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'long',
+      timeStyle: 'short',
+    }).format(timestamp);
+
+    expect(formatAbsoluteTime(timestamp)).toBe(expected);
   });
 });
