@@ -176,4 +176,25 @@ describe('areSnapshotsEqual', () => {
 
     expect(areSnapshotsEqual(a, b)).toBe(true);
   });
+
+  it('treats nested properties with different key order as equal', () => {
+    const a: SerializedBlock[] = [{
+      uuid: 'a1',
+      content: 'X',
+      properties: {
+        z: [{ b: 2, a: 1 }],
+        nested: { d: 4, c: 3 },
+      },
+    }];
+    const b: SerializedBlock[] = [{
+      uuid: 'a1',
+      content: 'X',
+      properties: {
+        nested: { c: 3, d: 4 },
+        z: [{ a: 1, b: 2 }],
+      },
+    }];
+
+    expect(areSnapshotsEqual(a, b)).toBe(true);
+  });
 });

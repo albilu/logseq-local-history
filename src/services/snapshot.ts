@@ -4,6 +4,35 @@ function normalizeProperties(properties?: Record<string, unknown>): Record<strin
   return properties && Object.keys(properties).length > 0 ? properties : {};
 }
 
+function areValuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true;
+  }
+
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false;
+    }
+
+    return a.every((value, index) => areValuesEqual(value, b[index]));
+  }
+
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    const aRecord = a as Record<string, unknown>;
+    const bRecord = b as Record<string, unknown>;
+    const aKeys = Object.keys(aRecord).sort();
+    const bKeys = Object.keys(bRecord).sort();
+
+    if (!areValuesEqual(aKeys, bKeys)) {
+      return false;
+    }
+
+    return aKeys.every((key) => areValuesEqual(aRecord[key], bRecord[key]));
+  }
+
+  return false;
+}
+
 export function serializeBlockTree(blocks: Array<Record<string, unknown>>): SerializedBlock[] {
   return blocks.map((block) => {
     const serialized: SerializedBlock = {
@@ -52,10 +81,7 @@ export function areSnapshotsEqual(a: SerializedBlock[], b: SerializedBlock[]): b
       return false;
     }
 
-    if (
-      JSON.stringify(normalizeProperties(aBlock.properties)) !==
-      JSON.stringify(normalizeProperties(bBlock.properties))
-    ) {
+    if (!areValuesEqual(normalizeProperties(aBlock.properties), normalizeProperties(bBlock.properties))) {
       return false;
     }
 
