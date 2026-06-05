@@ -1,6 +1,6 @@
 import type { PageSnapshot, PluginSettings, SerializedBlock } from '../types';
 import { parseExcludePages } from '../utils';
-import { addSnapshot, getSnapshots } from './history-store';
+import { addSnapshot, deleteSnapshot, getSnapshots } from './history-store';
 import { areSnapshotsEqual, serializeBlockTree } from './snapshot';
 
 type DbChangedBlock = {
@@ -103,6 +103,11 @@ async function captureSnapshot(pageName: string, maxVersions: number, currentGen
     };
 
     await addSnapshot(snapshot, maxVersions);
+    if (!isCurrentGeneration(currentGeneration)) {
+      await deleteSnapshot(pageName, snapshot.id);
+      return;
+    }
+
     if (isCurrentGeneration(currentGeneration)) {
       lastSnapshots.set(pageName, serialized);
     }

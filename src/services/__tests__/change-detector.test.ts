@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { installMockLogseq, mockEditor, resetMockLogseq } from '../../__mocks__/logseq';
+import { installMockLogseq, mockEditor, mockFileStorage, resetMockLogseq } from '../../__mocks__/logseq';
 import type { PageSnapshot } from '../../types';
 import { addSnapshot, getSnapshots } from '../history-store';
 import { handleDbChanged, resetState } from '../change-detector';
@@ -30,6 +30,43 @@ function makeChange(blocks: ChangedBlock[]) {
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
+}
+
+async function waitForSnapshots(pageName: string, expectedLength: number): Promise<void> {
+  for (let index = 0; index < 20; index += 1) {
+    const snapshots = await getSnapshots(pageName);
+    if (snapshots.length === expectedLength) {
+      return;
+    }
+
+    await flushMicrotasks();
+  }
+
+  expect(await getSnapshots(pageName)).toHaveLength(expectedLength);
+}
+
+async function waitForHistoryFileRemoval(): Promise<void> {
+  for (let index = 0; index < 20; index += 1) {
+    const removedHistoryFile = mockFileStorage.removeItem.mock.calls.some(([key]) => (
+      key.startsWith('history/')
+      && key.endsWith('.json')
+      && key !== 'history/_index.json'
+      && key !== 'history/_files.json'
+    ));
+
+    if (removedHistoryFile) {
+      return;
+    }
+
+    await flushMicrotasks();
+  }
+
+  expect(mockFileStorage.removeItem.mock.calls.some(([key]) => (
+    key.startsWith('history/')
+    && key.endsWith('.json')
+    && key !== 'history/_index.json'
+    && key !== 'history/_files.json'
+  ))).toBe(true);
 }
 
 beforeEach(() => {
@@ -275,5 +312,39 @@ describe('resetState', () => {
     await vi.advanceTimersByTimeAsync(1);
 
     expect(await getSnapshots('test page')).toHaveLength(1);
+  });
+
+  it('does not keep stale snapshots when reset happens during addSnapshot', async () => {
+    let resolveWrite: (() => void) | undefined;
+    const originalSetItem = mockFileStorage.setItem.getMockImplementation();
+
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      { uuid: 'b1', content: 'Hello', children: [] },
+    ]);
+    mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
+    mockFileStorage.setItem.mockImplementation(async (key: string, value: string) => {
+      if (
+        key.startsWith('history/')
+        && key.endsWith('.json')
+        && key !== 'history/_index.json'
+        && key !== 'history/_files.json'
+      ) {
+        await new Promise<void>((resolve) => {
+          resolveWrite = resolve;
+        });
+      }
+
+      await originalSetItem?.(key, value);
+    });
+
+    handleDbChanged(makeChange([{ uuid: 'b1', page: { name: 'test page' } }]), { ...defaultSettings, debounceMs: 1 });
+    await vi.advanceTimersByTimeAsync(1);
+    await flushMicrotasks();
+
+    resetState();
+    resolveWrite?.();
+    await waitForHistoryFileRemoval();
+
+    expect(await getSnapshots('test page')).toEqual([]);
   });
 });
