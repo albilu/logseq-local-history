@@ -33,7 +33,10 @@ export function formatRelativeTime(timestamp: number): string {
 }
 
 export function formatAbsoluteTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleString();
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'long',
+    timeStyle: 'short',
+  }).format(timestamp);
 }
 
 export function parseExcludePages(excludePages: string): string[] {
