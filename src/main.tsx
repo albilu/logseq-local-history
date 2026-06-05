@@ -76,11 +76,6 @@ async function main(): Promise<void> {
     showLocalHistory
   );
 
-  logseq.App.registerCommandShortcut('mod+shift+l', showLocalHistory, {
-    key: 'show-local-history-shortcut',
-    label: 'Show Local History',
-  });
-
   logseq.setMainUIInlineStyle({
     position: 'fixed',
     top: '0',

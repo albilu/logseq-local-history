@@ -63,10 +63,7 @@ describe('plugin bootstrap', () => {
         binding: 'mod+shift+l',
       }),
     }), expect.any(Function));
-    expect(mockLogseq.App.registerCommandShortcut).toHaveBeenCalledWith('mod+shift+l', expect.any(Function), expect.objectContaining({
-      key: 'show-local-history-shortcut',
-      label: 'Show Local History',
-    }));
+    expect(mockLogseq.App.registerCommandShortcut).not.toHaveBeenCalled();
     expect(mockLogseq.setMainUIInlineStyle).toHaveBeenCalledWith({
       position: 'fixed',
       top: '0',
