@@ -26,6 +26,14 @@ function getBlockPageName(block: DbChangedBlock): string | undefined {
   return typeof block.page.name === 'string' ? block.page.name : undefined;
 }
 
+function getBlockPageId(block: DbChangedBlock): number | undefined {
+  if (!block.page || typeof block.page !== 'object') {
+    return undefined;
+  }
+
+  return typeof block.page.id === 'number' ? block.page.id : undefined;
+}
+
 type TimerMap = Map<string, ReturnType<typeof setTimeout>>;
 type CaptureMap = Map<string, Promise<void>>;
 type PageDatom = [unknown, unknown, unknown, unknown];
@@ -52,8 +60,8 @@ async function getPageNamesFromTxData(txData: unknown[]): Promise<string[]> {
       continue;
     }
 
-    const attribute = entry[2];
-    const value = entry[3];
+    const attribute = entry[1];
+    const value = entry[2];
     if ((attribute === ':block/name' || attribute === ':block/original-name') && typeof value === 'string') {
       pageNames.add(value);
       continue;
@@ -149,18 +157,36 @@ function queueCapture(pageName: string, maxVersions: number, currentGeneration: 
 async function collectAffectedPages(data: DbChangedData, settings: PluginSettings, currentGeneration: number): Promise<Set<string>> {
   const excludedPages = parseExcludePages(settings.excludePages);
   const affectedPages = new Set<string>();
+  const pageIdsToResolve = new Set<number>();
 
   for (const block of data.blocks) {
     const pageName = getBlockPageName(block);
-    if (!pageName) {
+    if (pageName) {
+      if (!excludedPages.includes(pageName.toLowerCase())) {
+        affectedPages.add(pageName);
+      }
       continue;
     }
 
-    if (excludedPages.includes(pageName.toLowerCase())) {
-      continue;
+    const pageId = getBlockPageId(block);
+    if (pageId !== undefined) {
+      pageIdsToResolve.add(pageId);
+    }
+  }
+
+  for (const pageId of pageIdsToResolve) {
+    if (!isCurrentGeneration(currentGeneration)) {
+      return new Set();
     }
 
-    affectedPages.add(pageName);
+    try {
+      const page = await logseq.Editor.getPage(pageId);
+      if (typeof page?.name === 'string' && !excludedPages.includes(page.name.toLowerCase())) {
+        affectedPages.add(page.name);
+      }
+    } catch (error) {
+      console.error(`Failed to resolve page from block page ID ${pageId}`, error);
+    }
   }
 
   const txPageNames = await getPageNamesFromTxData(data.txData);

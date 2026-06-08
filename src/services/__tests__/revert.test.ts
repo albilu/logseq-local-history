@@ -111,10 +111,10 @@ describe('revertToSnapshot', () => {
     expect(mockEditor.removeBlock).not.toHaveBeenCalledWith('other-b1');
 
     const pageHistoryWrites = mockFileStorage.setItem.mock.calls
-      .filter(([key]) => key.startsWith('history/') && key.endsWith('.json'));
+      .filter(([key]) => key.startsWith('history.') && key.endsWith('.json'));
       
     const snapshotWrites = pageHistoryWrites.filter(([key]) => (
-      key !== 'history/_index.json' && key !== 'history/_files.json'
+      key !== 'history._index.json' && key !== 'history._files.json'
     ));
     expect(snapshotWrites).toHaveLength(1);
 

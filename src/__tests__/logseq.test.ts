@@ -15,13 +15,13 @@ describe('resetMockLogseq', () => {
   });
 
   it('restores file storage defaults after reset', async () => {
-    await mockFileStorage.setItem('history/test.json', 'value');
+    await mockFileStorage.setItem('history.test.json', 'value');
 
     resetMockLogseq();
 
-    await expect(mockFileStorage.hasItem('history/test.json')).resolves.toBe(false);
-    await mockFileStorage.setItem('history/test.json', 'value');
-    await expect(mockFileStorage.getItem('history/test.json')).resolves.toBe('value');
+    await expect(mockFileStorage.hasItem('history.test.json')).resolves.toBe(false);
+    await mockFileStorage.setItem('history.test.json', 'value');
+    await expect(mockFileStorage.getItem('history.test.json')).resolves.toBe('value');
   });
 
   it('restores ready callback execution after reset', async () => {

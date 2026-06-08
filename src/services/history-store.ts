@@ -1,14 +1,14 @@
 import type { HistoryIndex, PageSnapshot } from '../types';
 import { sanitizePageName } from '../utils';
 
-const INDEX_KEY = 'history/_index.json';
-const FILE_KEYS_KEY = 'history/_files.json';
+const INDEX_KEY = 'history._index.json';
+const FILE_KEYS_KEY = 'history._files.json';
 
 function storageKey(pageName: string): string {
   const safeName = sanitizePageName(pageName);
   const encodedName = encodeURIComponent(pageName).replace(/\*/g, '%2A');
 
-  return `history/${safeName}__${encodedName}.json`;
+  return `history.${safeName}__${encodedName}.json`;
 }
 
 function toIndexEntries(snapshots: PageSnapshot[]) {

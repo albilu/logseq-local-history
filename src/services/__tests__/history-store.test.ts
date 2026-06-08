@@ -118,8 +118,8 @@ describe('addSnapshot', () => {
 
     const historyFileKeys = mockFileStorage.setItem.mock.calls
       .map(([key]) => key)
-      .filter((key) => key.startsWith('history/') && key.endsWith('.json'))
-      .filter((key) => key !== 'history/_index.json' && key !== 'history/_files.json');
+      .filter((key) => key.startsWith('history.') && key.endsWith('.json'))
+      .filter((key) => key !== 'history._index.json' && key !== 'history._files.json');
 
     expect(historyFileKeys).toHaveLength(1);
     expect(historyFileKeys[0]).not.toContain('*');
@@ -191,7 +191,7 @@ describe('clearAllHistory', () => {
 
     await addSnapshot(first, 50);
     await addSnapshot(second, 50);
-    await mockFileStorage.setItem('history/_index.json', JSON.stringify({
+    await mockFileStorage.setItem('history._index.json', JSON.stringify({
       page1: [{ id: first.id, timestamp: first.timestamp }],
     }));
 

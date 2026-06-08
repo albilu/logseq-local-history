@@ -10,6 +10,7 @@ type ChangedBlock = {
   uuid: string;
   page?: {
     name?: string;
+    id?: number;
   };
 };
 
@@ -55,10 +56,10 @@ async function waitForSnapshots(pageName: string, expectedLength: number): Promi
 async function waitForHistoryFileRemoval(): Promise<void> {
   for (let index = 0; index < 20; index += 1) {
     const removedHistoryFile = mockFileStorage.removeItem.mock.calls.some(([key]) => (
-      key.startsWith('history/')
+      key.startsWith('history.')
       && key.endsWith('.json')
-      && key !== 'history/_index.json'
-      && key !== 'history/_files.json'
+      && key !== 'history._index.json'
+      && key !== 'history._files.json'
     ));
 
     if (removedHistoryFile) {
@@ -69,10 +70,10 @@ async function waitForHistoryFileRemoval(): Promise<void> {
   }
 
   expect(mockFileStorage.removeItem.mock.calls.some(([key]) => (
-    key.startsWith('history/')
+    key.startsWith('history.')
     && key.endsWith('.json')
-    && key !== 'history/_index.json'
-    && key !== 'history/_files.json'
+    && key !== 'history._index.json'
+    && key !== 'history._files.json'
   ))).toBe(true);
 }
 
@@ -171,6 +172,27 @@ describe('handleDbChanged', () => {
     expect(await getSnapshots('page b')).toHaveLength(1);
   });
 
+  it('resolves page name from block page id when name is missing', async () => {
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      { uuid: 'b1', content: 'Hello', children: [] },
+    ]);
+    mockEditor.getPage.mockImplementation(async (pageRef: string | number) => {
+      if (pageRef === 42) {
+        return { uuid: 'page-uuid', name: 'resolved page' };
+      }
+
+      return { uuid: 'page-uuid', name: String(pageRef) };
+    });
+
+    handleDbChanged(makeChange([{ uuid: 'b1', page: { id: 42 } }]), defaultSettings);
+
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(mockEditor.getPageBlocksTree).toHaveBeenCalledWith('resolved page');
+    expect(await getSnapshots('resolved page')).toHaveLength(1);
+  });
+
   it('skips blocks without page info', async () => {
     handleDbChanged(makeChange([{ uuid: 'b1' }]), defaultSettings);
 
@@ -189,7 +211,7 @@ describe('handleDbChanged', () => {
       {
         blocks: [{ uuid: 'b1' }],
         txData: [
-          [':db/add', 'datom-1', ':block/name', 'test page'],
+          [101, ':block/name', 'test page', 1001, true],
         ],
       },
       defaultSettings
@@ -205,8 +227,8 @@ describe('handleDbChanged', () => {
     mockEditor.getPageBlocksTree.mockResolvedValue([
       { uuid: 'b1', content: 'Hello', children: [] },
     ]);
-    mockEditor.getPage.mockImplementation(async (pageRef: string) => {
-      if (pageRef === 'page-entity-1') {
+    mockEditor.getPage.mockImplementation(async (pageRef: string | number) => {
+      if (pageRef === 'page-entity-1' || pageRef === 201) {
         return { uuid: 'page-uuid', name: 'tx page' };
       }
 
@@ -217,7 +239,7 @@ describe('handleDbChanged', () => {
       {
         blocks: [{ uuid: 'b1' }],
         txData: [
-          [':db/add', 'block-1', ':block/page', 'page-entity-1'],
+          [102, ':block/page', 201, 1002, true],
         ],
       },
       defaultSettings
@@ -305,8 +327,8 @@ describe('handleDbChanged', () => {
     mockEditor.getPageBlocksTree.mockResolvedValue([
       { uuid: 'b1', content: 'Hello', children: [] },
     ]);
-    mockEditor.getPage.mockImplementation(async (pageRef: string) => {
-      if (pageRef === 'missing-page-ref') {
+    mockEditor.getPage.mockImplementation(async (pageRef: string | number) => {
+      if (pageRef === 'missing-page-ref' || pageRef === 999) {
         throw new Error('lookup failed');
       }
 
@@ -317,7 +339,7 @@ describe('handleDbChanged', () => {
       {
         blocks: [{ uuid: 'b1', page: { name: 'test page' } }],
         txData: [
-          [':db/add', 'block-1', ':block/page', 'missing-page-ref'],
+          [103, ':block/page', 999, 1003, true],
         ],
       },
       defaultSettings
@@ -383,10 +405,10 @@ describe('resetState', () => {
     mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
     mockFileStorage.setItem.mockImplementation(async (key: string, value: string) => {
       if (
-        key.startsWith('history/')
+        key.startsWith('history.')
         && key.endsWith('.json')
-        && key !== 'history/_index.json'
-        && key !== 'history/_files.json'
+        && key !== 'history._index.json'
+        && key !== 'history._files.json'
       ) {
         await new Promise<void>((resolve) => {
           resolveWrite = resolve;
@@ -417,10 +439,10 @@ describe('resetState', () => {
     mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
     mockFileStorage.setItem.mockImplementation(async (key: string, value: string) => {
       if (
-        key.startsWith('history/')
+        key.startsWith('history.')
         && key.endsWith('.json')
-        && key !== 'history/_index.json'
-        && key !== 'history/_files.json'
+        && key !== 'history._index.json'
+        && key !== 'history._files.json'
         && !resolveOldWrite
       ) {
         await new Promise<void>((resolve) => {
