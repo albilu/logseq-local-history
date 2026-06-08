@@ -25,11 +25,15 @@ vi.mock('react-diff-viewer-continued', () => ({
     newValue,
     splitView,
     useDarkTheme,
+    leftTitle,
+    rightTitle,
   }: {
     oldValue: string;
     newValue: string;
     splitView: boolean;
     useDarkTheme?: boolean;
+    leftTitle?: string;
+    rightTitle?: string;
   }) => (
     <div
       data-testid="diff-viewer"
@@ -37,6 +41,8 @@ vi.mock('react-diff-viewer-continued', () => ({
       data-new-value={newValue}
       data-split-view={String(splitView)}
       data-use-dark-theme={String(useDarkTheme)}
+      data-left-title={leftTitle ?? ''}
+      data-right-title={rightTitle ?? ''}
     />
   ),
   DiffMethod: {
@@ -305,6 +311,8 @@ describe('DiffViewerPanel', () => {
     const diffViewer = container.querySelector('[data-testid="diff-viewer"]');
     expect(diffViewer?.getAttribute('data-split-view')).toBe('true');
     expect(diffViewer?.getAttribute('data-use-dark-theme')).toBe('false');
+    expect(diffViewer?.getAttribute('data-left-title')).toBe('');
+    expect(diffViewer?.getAttribute('data-right-title')).toBe('');
 
     const splitCheckbox = container.querySelector('.diff-controls input[type="checkbox"]') as HTMLInputElement;
     await act(async () => {
@@ -332,6 +340,33 @@ describe('DiffViewerPanel', () => {
     });
 
     expect(revertToSnapshotMock).toHaveBeenCalledWith(snapshots[0], 7);
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets the Back button receive clicks while rendering the diff panel header', async () => {
+    const onBack = vi.fn();
+    const { DiffViewerPanel } = await import('./DiffViewer');
+
+    await act(async () => {
+      root.render(
+        <DiffViewerPanel
+          snapshotA={snapshots[0]}
+          snapshotB={snapshots[1]}
+          onBack={onBack}
+          maxVersions={5}
+        />
+      );
+      await flushPromises();
+    });
+
+    const backButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Back');
+    expect(backButton).toBeDefined();
+
+    await act(async () => {
+      backButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushPromises();
+    });
+
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 

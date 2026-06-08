@@ -19,6 +19,31 @@ function getCurrentPageName(page: unknown): string {
   return typeof pageRecord.name === 'string' ? pageRecord.name : '';
 }
 
+function getCurrentPageUuid(page: unknown): string {
+  if (!page || typeof page !== 'object') {
+    return '';
+  }
+
+  const pageRecord = page as { uuid?: unknown };
+  return typeof pageRecord.uuid === 'string' ? pageRecord.uuid : '';
+}
+
+function isSamePage(page: unknown, snapshot: PageSnapshot): boolean {
+  const currentPageUuid = getCurrentPageUuid(page);
+  if (currentPageUuid && snapshot.pageUuid) {
+    if (currentPageUuid === snapshot.pageUuid) {
+      return true;
+    }
+  }
+
+  const currentPageName = getCurrentPageName(page);
+  if (!currentPageName) {
+    return false;
+  }
+
+  return currentPageName.toLowerCase() === snapshot.pageName.toLowerCase();
+}
+
 type View = 'sidebar' | 'diff';
 
 interface DiffState {
@@ -30,8 +55,10 @@ interface DiffState {
 export default function App() {
   const [view, setView] = useState<View>('sidebar');
   const [diffState, setDiffState] = useState<DiffState | null>(null);
+  const [sidebarSession, setSidebarSession] = useState(0);
 
   useEffect(() => {
+    logseq.setMainUIAttrs({ draggable: false });
     logseq.setMainUIInlineStyle({
       position: 'fixed',
       top: '0',
@@ -46,6 +73,7 @@ export default function App() {
     logseq.hideMainUI({ restoreEditingCursor: true });
     setView('sidebar');
     setDiffState(null);
+    setSidebarSession((current) => current + 1);
   }, []);
 
   const handleCompare = useCallback(async (snapshotA: PageSnapshot, snapshotB: PageSnapshot | null) => {
@@ -54,7 +82,16 @@ export default function App() {
     if (snapshotB === null) {
       try {
         const currentPage = await logseq.Editor.getCurrentPage();
-        if (getCurrentPageName(currentPage) !== snapshotA.pageName) {
+        const samePage = isSamePage(currentPage, snapshotA);
+        console.info('[local-history] compare-current identity', {
+          snapshotPageName: snapshotA.pageName,
+          snapshotPageUuid: snapshotA.pageUuid,
+          currentPage,
+          resolvedCurrentPageName: getCurrentPageName(currentPage),
+          resolvedCurrentPageUuid: getCurrentPageUuid(currentPage),
+          samePage,
+        });
+        if (!samePage) {
           await logseq.UI.showMsg(
             'The current page changed. Close and reopen Local History for the new page.',
             'warning'
@@ -97,7 +134,9 @@ export default function App() {
   return (
     <>
       <div className="local-history-overlay" onClick={handleClose} />
-      {view === 'sidebar' ? <HistorySidebar onCompare={handleCompare} onClose={handleClose} /> : null}
+      {view === 'sidebar' ? (
+        <HistorySidebar key={sidebarSession} onCompare={handleCompare} onClose={handleClose} />
+      ) : null}
       {view === 'diff' && diffState ? (
         <DiffViewerPanel
           className="diff-view-container diff-view-container-expanded"

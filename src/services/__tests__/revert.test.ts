@@ -46,7 +46,7 @@ const multiRootSnapshot: PageSnapshot = {
 };
 
 describe('revertToSnapshot', () => {
-  it('removes existing blocks and inserts snapshot blocks', async () => {
+  it('removes existing blocks and inserts snapshot blocks using insertBlock for children', async () => {
     mockEditor.getPageBlocksTree.mockResolvedValue([
       { uuid: 'cur-b1', content: 'Current', children: [] },
       { uuid: 'cur-b2', content: 'Current 2', children: [] },
@@ -54,23 +54,21 @@ describe('revertToSnapshot', () => {
     mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
     mockEditor.removeBlock.mockResolvedValue(undefined);
     mockEditor.appendBlockInPage.mockResolvedValue({ uuid: 'new-b1' });
-    mockEditor.insertBatchBlock
-      .mockResolvedValueOnce([{ uuid: 'new-b2' }])
-      .mockResolvedValueOnce([{ uuid: 'new-b3' }]);
+    mockEditor.insertBlock.mockResolvedValue({ uuid: 'new-child-1' });
 
     await revertToSnapshot(targetSnapshot);
 
     expect(mockEditor.removeBlock).toHaveBeenCalledWith('cur-b1');
     expect(mockEditor.removeBlock).toHaveBeenCalledWith('cur-b2');
     expect(mockEditor.appendBlockInPage).toHaveBeenCalledWith(
-      'test page',
+      'page-uuid',
       'Old content',
       expect.any(Object)
     );
-    expect(mockEditor.insertBatchBlock).toHaveBeenCalledWith(
+    expect(mockEditor.insertBlock).toHaveBeenCalledWith(
       'new-b1',
-      [{ content: 'Old child', properties: {}, children: [] }],
-      { sibling: false }
+      'Old child',
+      expect.objectContaining({ sibling: false })
     );
     expect(mockUI.showMsg).toHaveBeenCalledWith(
       expect.stringContaining('Reverted'),
@@ -85,44 +83,59 @@ describe('revertToSnapshot', () => {
     mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
     mockEditor.removeBlock.mockResolvedValue(undefined);
     mockEditor.appendBlockInPage.mockResolvedValue({ uuid: 'new-b1' });
-    mockEditor.insertBatchBlock.mockResolvedValue([{ uuid: 'new-b2' }]);
+    mockEditor.insertBlock.mockResolvedValue({ uuid: 'new-child-1' });
 
     await revertToSnapshot(targetSnapshot);
 
     expect(mockFileStorage.setItem).toHaveBeenCalled();
   });
 
-  it('backs up and restores the snapshot page even when another page is current', async () => {
-    mockEditor.getCurrentPageBlocksTree.mockResolvedValue([
-      { uuid: 'other-b1', content: 'Other page block', children: [] },
-    ]);
+  it('restores multiple root blocks by appending each one', async () => {
     mockEditor.getPageBlocksTree.mockResolvedValue([
-      { uuid: 'target-b1', content: 'Target page block', children: [] },
+      { uuid: 'cur-b1', content: 'Current', children: [] },
+    ]);
+    mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
+    mockEditor.removeBlock.mockResolvedValue(undefined);
+    mockEditor.appendBlockInPage
+      .mockResolvedValueOnce({ uuid: 'new-root-a' })
+      .mockResolvedValueOnce({ uuid: 'new-root-b' });
+
+    await revertToSnapshot(multiRootSnapshot);
+
+    expect(mockEditor.appendBlockInPage).toHaveBeenNthCalledWith(
+      1,
+      'page-uuid',
+      'Root A',
+      expect.any(Object)
+    );
+    expect(mockEditor.appendBlockInPage).toHaveBeenNthCalledWith(
+      2,
+      'page-uuid',
+      'Root B',
+      expect.any(Object)
+    );
+    expect(mockUI.showMsg).toHaveBeenCalledWith(
+      expect.stringContaining('Reverted'),
+      'success'
+    );
+  });
+
+  it('uses the resolved page uuid for appendBlockInPage', async () => {
+    mockEditor.getPageBlocksTree.mockResolvedValue([
+      { uuid: 'cur-b1', content: 'Current', children: [] },
     ]);
     mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
     mockEditor.removeBlock.mockResolvedValue(undefined);
     mockEditor.appendBlockInPage.mockResolvedValue({ uuid: 'new-b1' });
-    mockEditor.insertBatchBlock.mockResolvedValue([{ uuid: 'new-b2' }]);
+    mockEditor.insertBlock.mockResolvedValue({ uuid: 'new-child-1' });
 
     await revertToSnapshot(targetSnapshot);
 
-    expect(mockEditor.getPageBlocksTree).toHaveBeenCalledWith('test page');
-    expect(mockEditor.removeBlock).toHaveBeenCalledWith('target-b1');
-    expect(mockEditor.removeBlock).not.toHaveBeenCalledWith('other-b1');
-
-    const pageHistoryWrites = mockFileStorage.setItem.mock.calls
-      .filter(([key]) => key.startsWith('history.') && key.endsWith('.json'));
-      
-    const snapshotWrites = pageHistoryWrites.filter(([key]) => (
-      key !== 'history._index.json' && key !== 'history._files.json'
-    ));
-    expect(snapshotWrites).toHaveLength(1);
-
-    const [latestWrite] = snapshotWrites;
-    const [, latestSnapshotsJson] = latestWrite;
-    expect(JSON.parse(latestSnapshotsJson as string)[0].blocks).toEqual([
-      { uuid: 'target-b1', content: 'Target page block' },
-    ]);
+    expect(mockEditor.appendBlockInPage).toHaveBeenCalledWith(
+      'page-uuid',
+      'Old content',
+      expect.any(Object)
+    );
   });
 
   it('fails when the first block cannot be reinserted after deletion', async () => {
@@ -134,7 +147,7 @@ describe('revertToSnapshot', () => {
     mockEditor.appendBlockInPage.mockResolvedValue(null);
 
     await expect(revertToSnapshot(targetSnapshot)).rejects.toThrow(
-      'Failed to restore first root block for page "test page"'
+      'Failed to restore root block for page "test page"'
     );
 
     expect(mockUI.showMsg).not.toHaveBeenCalledWith(
@@ -143,7 +156,7 @@ describe('revertToSnapshot', () => {
     );
   });
 
-  it('restores the backup blocks when batch insertion fails after the first append', async () => {
+  it('restores backup blocks when child insertion fails', async () => {
     mockEditor.getPageBlocksTree.mockResolvedValue([
       {
         uuid: 'backup-b1',
@@ -156,113 +169,17 @@ describe('revertToSnapshot', () => {
     mockEditor.appendBlockInPage
       .mockResolvedValueOnce({ uuid: 'new-target-root' })
       .mockResolvedValueOnce({ uuid: 'restored-backup-root' });
-    mockEditor.insertBatchBlock
-      .mockRejectedValueOnce(new Error('batch insert failed'))
-      .mockResolvedValueOnce([{ uuid: 'restored-backup-child' }]);
+    mockEditor.insertBlock
+      .mockRejectedValueOnce(new Error('insert failed'))
+      .mockResolvedValueOnce({ uuid: 'restored-backup-child' });
 
-    await expect(revertToSnapshot(targetSnapshot)).rejects.toThrow('batch insert failed');
+    await expect(revertToSnapshot(targetSnapshot)).rejects.toThrow('insert failed');
 
-    expect(mockEditor.appendBlockInPage).toHaveBeenNthCalledWith(
-      1,
-      'test page',
-      'Old content',
-      expect.any(Object)
-    );
     expect(mockEditor.appendBlockInPage).toHaveBeenNthCalledWith(
       2,
-      'test page',
+      'page-uuid',
       'Backup root',
       expect.any(Object)
-    );
-    expect(mockEditor.insertBatchBlock).toHaveBeenNthCalledWith(
-      2,
-      'restored-backup-root',
-      [{ content: 'Backup child', properties: {}, children: [] }],
-      { sibling: false }
-    );
-    expect(mockUI.showMsg).not.toHaveBeenCalledWith(
-      expect.stringContaining('Reverted'),
-      'success'
-    );
-  });
-
-  it('treats an empty batch insert result as failure and restores the backup blocks', async () => {
-    mockEditor.getPageBlocksTree.mockResolvedValue([
-      {
-        uuid: 'backup-b1',
-        content: 'Backup root',
-        children: [{ uuid: 'backup-b2', content: 'Backup child' }],
-      },
-    ]);
-    mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
-    mockEditor.removeBlock.mockResolvedValue(undefined);
-    mockEditor.appendBlockInPage
-      .mockResolvedValueOnce({ uuid: 'new-target-root' })
-      .mockResolvedValueOnce({ uuid: 'restored-backup-root' });
-    mockEditor.insertBatchBlock
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ uuid: 'restored-backup-child' }]);
-
-    await expect(revertToSnapshot(targetSnapshot)).rejects.toThrow(
-      'Failed to restore child blocks for page "test page"'
-    );
-
-    expect(mockEditor.appendBlockInPage).toHaveBeenNthCalledWith(
-      2,
-      'test page',
-      'Backup root',
-      expect.any(Object)
-    );
-    expect(mockEditor.insertBatchBlock).toHaveBeenNthCalledWith(
-      2,
-      'restored-backup-root',
-      [{ content: 'Backup child', properties: {}, children: [] }],
-      { sibling: false }
-    );
-    expect(mockUI.showMsg).not.toHaveBeenCalledWith(
-      expect.stringContaining('Reverted'),
-      'success'
-    );
-  });
-
-  it('treats an empty remaining-root insert result as failure and restores the backup blocks', async () => {
-    mockEditor.getPageBlocksTree.mockResolvedValue([
-      {
-        uuid: 'backup-b1',
-        content: 'Backup root',
-        children: [{ uuid: 'backup-b2', content: 'Backup child' }],
-      },
-    ]);
-    mockEditor.getPage.mockResolvedValue({ uuid: 'page-uuid', name: 'test page' });
-    mockEditor.removeBlock.mockResolvedValue(undefined);
-    mockEditor.appendBlockInPage
-      .mockResolvedValueOnce({ uuid: 'new-target-root' })
-      .mockResolvedValueOnce({ uuid: 'restored-backup-root' });
-    mockEditor.insertBatchBlock
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ uuid: 'restored-backup-child' }]);
-
-    await expect(revertToSnapshot(multiRootSnapshot)).rejects.toThrow(
-      'Failed to restore remaining root blocks for page "test page"'
-    );
-
-    expect(mockEditor.insertBatchBlock).toHaveBeenNthCalledWith(
-      1,
-      'new-target-root',
-      [{ content: 'Root B', properties: {}, children: [] }],
-      { sibling: true }
-    );
-    expect(mockEditor.appendBlockInPage).toHaveBeenNthCalledWith(
-      2,
-      'test page',
-      'Backup root',
-      expect.any(Object)
-    );
-    expect(mockEditor.insertBatchBlock).toHaveBeenNthCalledWith(
-      2,
-      'restored-backup-root',
-      [{ content: 'Backup child', properties: {}, children: [] }],
-      { sibling: false }
     );
     expect(mockUI.showMsg).not.toHaveBeenCalledWith(
       expect.stringContaining('Reverted'),

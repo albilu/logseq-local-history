@@ -310,7 +310,7 @@ describe('handleDbChanged', () => {
     expect(mockEditor.getPage).toHaveBeenCalledTimes(1);
 
     pageResolvers[0]({ uuid: 'page-uuid', name: 'test page' });
-    await flushMicrotasks();
+    await waitForSnapshots('test page', 1);
 
     expect(mockEditor.getPage).toHaveBeenCalledTimes(1);
     expect(await getSnapshots('test page')).toHaveLength(1);

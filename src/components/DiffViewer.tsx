@@ -117,8 +117,6 @@ export function DiffViewerPanel({
           oldValue={oldText}
           newValue={newText}
           splitView={splitView}
-          leftTitle={oldTitle}
-          rightTitle={newTitle}
           compareMethod={DiffMethod.WORDS}
           useDarkTheme={darkTheme}
         />

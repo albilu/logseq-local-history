@@ -29,6 +29,7 @@ export const mockEditor = {
   removeBlock: vi.fn(),
   appendBlockInPage: vi.fn(),
   insertBatchBlock: vi.fn(),
+  insertBlock: vi.fn(),
 };
 
 export const mockUI = {
@@ -53,6 +54,7 @@ export const mockLogseq = {
   provideStyle: vi.fn(),
   showMainUI: vi.fn(),
   hideMainUI: vi.fn(),
+  setMainUIAttrs: vi.fn(),
   setMainUIInlineStyle: vi.fn(),
   onSettingsChanged: vi.fn(),
   beforeunload: vi.fn(),

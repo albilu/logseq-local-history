@@ -94,6 +94,7 @@ async function captureSnapshot(pageName: string, maxVersions: number, currentGen
 
     const blocks = await logseq.Editor.getPageBlocksTree(pageName);
     if (!isCurrentGeneration(currentGeneration) || !Array.isArray(blocks) || blocks.length === 0) {
+      console.info('[local-history] no blocks for', pageName, '- blocks:', blocks);
       return;
     }
 
@@ -126,6 +127,7 @@ async function captureSnapshot(pageName: string, maxVersions: number, currentGen
     };
 
     await addSnapshot(snapshot, maxVersions);
+    console.info('[local-history] snapshot saved for', pageName, '- total:', (await getSnapshots(pageName)).length);
     if (!isCurrentGeneration(currentGeneration)) {
       await deleteSnapshot(pageName, snapshot.id);
       return;
@@ -135,7 +137,7 @@ async function captureSnapshot(pageName: string, maxVersions: number, currentGen
       lastSnapshots.set(pageName, serialized);
     }
   } catch (error) {
-    console.error(`Failed to capture snapshot for "${pageName}"`, error);
+    console.error(`[local-history] Failed to capture snapshot for "${pageName}"`, error);
   }
 }
 
@@ -223,6 +225,10 @@ export function handleDbChanged(data: DbChangedData, settings: PluginSettings): 
     .then((affectedPages) => {
       if (!isCurrentGeneration(currentGeneration)) {
         return;
+      }
+
+      if (affectedPages.size > 0) {
+        console.info('[local-history] pages changed:', [...affectedPages]);
       }
 
       for (const pageName of affectedPages) {

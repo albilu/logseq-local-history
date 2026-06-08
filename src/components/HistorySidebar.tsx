@@ -58,6 +58,22 @@ export function HistorySidebar({ onCompare, onClose }: HistorySidebarProps) {
     void loadSnapshots();
   }, [loadSnapshots]);
 
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void loadSnapshots();
+      }
+    };
+
+    window.addEventListener('focus', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadSnapshots]);
+
   const handleSelect = useCallback((snapshotId: string, multiSelect: boolean) => {
     setSelectedIds((currentIds) => {
       if (!multiSelect) {

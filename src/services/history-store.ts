@@ -15,18 +15,29 @@ function toIndexEntries(snapshots: PageSnapshot[]) {
   return snapshots.map((snapshot) => ({ id: snapshot.id, timestamp: snapshot.timestamp }));
 }
 
+async function readStorage(key: string): Promise<string | null> {
+  try {
+    const raw = await logseq.FileStorage.getItem(key);
+    if (raw == null || raw === '') {
+      return null;
+    }
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
 async function saveIndex(index: HistoryIndex): Promise<void> {
   await logseq.FileStorage.setItem(INDEX_KEY, JSON.stringify(index));
 }
 
 async function getFileKeys(): Promise<string[]> {
   try {
-    const hasItem = await logseq.FileStorage.hasItem(FILE_KEYS_KEY);
-    if (!hasItem) {
+    const raw = await readStorage(FILE_KEYS_KEY);
+    if (!raw) {
       return [];
     }
 
-    const raw = await logseq.FileStorage.getItem(FILE_KEYS_KEY);
     return JSON.parse(raw) as string[];
   } catch {
     return [];
@@ -58,12 +69,11 @@ async function removeFileKey(fileKey: string): Promise<void> {
 
 export async function getIndex(): Promise<HistoryIndex> {
   try {
-    const hasItem = await logseq.FileStorage.hasItem(INDEX_KEY);
-    if (!hasItem) {
+    const raw = await readStorage(INDEX_KEY);
+    if (!raw) {
       return {};
     }
 
-    const raw = await logseq.FileStorage.getItem(INDEX_KEY);
     return JSON.parse(raw) as HistoryIndex;
   } catch {
     return {};
@@ -74,12 +84,11 @@ export async function getSnapshots(pageName: string): Promise<PageSnapshot[]> {
   const key = storageKey(pageName);
 
   try {
-    const hasItem = await logseq.FileStorage.hasItem(key);
-    if (!hasItem) {
+    const raw = await readStorage(key);
+    if (!raw) {
       return [];
     }
 
-    const raw = await logseq.FileStorage.getItem(key);
     return JSON.parse(raw) as PageSnapshot[];
   } catch {
     return [];

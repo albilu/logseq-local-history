@@ -149,6 +149,17 @@ describe('App shell', () => {
     expect(container.textContent).toContain('Local History');
   });
 
+  it('marks the Logseq main UI host as non-draggable so header controls stay clickable', async () => {
+    const { default: App } = await import('./App');
+
+    await act(async () => {
+      root.render(<App />);
+      await flushPromises();
+    });
+
+    expect(mockLogseq.setMainUIAttrs).toHaveBeenCalledWith({ draggable: false });
+  });
+
   it('closes on overlay click and Escape with cursor restore', async () => {
     const { default: App } = await import('./App');
 
@@ -173,6 +184,35 @@ describe('App shell', () => {
     });
 
     expect(mockLogseq.hideMainUI).toHaveBeenCalledTimes(2);
+  });
+
+  it('reloads the current page after closing and reopening local history', async () => {
+    const { default: App } = await import('./App');
+
+    mockEditor.getCurrentPage.mockResolvedValueOnce({ originalName: 'Project Notes' });
+
+    await act(async () => {
+      root.render(<App />);
+      await flushPromises();
+    });
+
+    expect(container.textContent).toContain('Project Notes');
+
+    const overlay = container.querySelector('.local-history-overlay');
+    await act(async () => {
+      overlay?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushPromises();
+    });
+
+    mockEditor.getCurrentPage.mockResolvedValue({ originalName: 'First Note' });
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      await flushPromises();
+    });
+
+    expect(container.textContent).toContain('First Note');
+    expect(container.textContent).not.toContain('Project Notes');
   });
 
   it('uses maxVersions from settings for revert actions with a fallback of 50', async () => {
@@ -277,6 +317,76 @@ describe('App shell', () => {
     expect(container.textContent).toContain('Local History');
     expect(container.textContent).not.toContain('Current Version');
     expect(mockEditor.getCurrentPageBlocksTree).not.toHaveBeenCalled();
+  });
+
+  it('allows compare with current when Logseq returns the same page by uuid but a different name shape', async () => {
+    const { default: App } = await import('./App');
+
+    await act(async () => {
+      root.render(<App />);
+      await flushPromises();
+    });
+
+    const items = Array.from(container.querySelectorAll('.snapshot-item')) as HTMLDivElement[];
+    await act(async () => {
+      items[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushPromises();
+    });
+
+    mockEditor.getCurrentPage.mockResolvedValue({ name: 'project notes', uuid: 'page-1' });
+
+    const compareButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Compare with Current')
+    );
+
+    await act(async () => {
+      compareButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushPromises();
+    });
+
+    expect(mockUI.showMsg).not.toHaveBeenCalledWith(
+      'The current page changed. Close and reopen Local History for the new page.',
+      'warning'
+    );
+    expect(mockEditor.getCurrentPageBlocksTree).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain('Current Version');
+  });
+
+  it('allows compare with current when the page name matches but Logseq returns a different uuid', async () => {
+    const { default: App } = await import('./App');
+
+    await act(async () => {
+      root.render(<App />);
+      await flushPromises();
+    });
+
+    const items = Array.from(container.querySelectorAll('.snapshot-item')) as HTMLDivElement[];
+    await act(async () => {
+      items[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushPromises();
+    });
+
+    mockEditor.getCurrentPage.mockResolvedValue({
+      name: 'Project Notes',
+      originalName: 'PROJECT NOTES',
+      uuid: 'different-page-uuid',
+    });
+
+    const compareButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Compare with Current')
+    );
+
+    await act(async () => {
+      compareButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushPromises();
+    });
+
+    expect(mockUI.showMsg).not.toHaveBeenCalledWith(
+      'The current page changed. Close and reopen Local History for the new page.',
+      'warning'
+    );
+    expect(mockEditor.getCurrentPageBlocksTree).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain('Current Version');
   });
 
   it('shows an error and stays on the sidebar when current page blocks cannot be loaded', async () => {
