@@ -1,5 +1,6 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useCallback, useEffect, useState } from 'react';
+import { t, tPlural } from '../i18n';
 import { clearHistory, getSnapshots } from '../services/history-store';
 import type { PageSnapshot } from '../types';
 import { formatAbsoluteTime, formatRelativeTime } from '../utils';
@@ -41,16 +42,16 @@ export function HistorySidebar({ onCompare, onClose }: HistorySidebarProps) {
       const nextSnapshots = await getSnapshots(nextPageName);
       setSnapshots([...nextSnapshots].reverse());
       setSelectedIds([]);
-    } catch {
-      setSnapshots([]);
-      setSelectedIds([]);
-      if (nextPageName) {
-        setPageName(nextPageName);
-        setLoadError('Failed to load history for this page.');
-        void logseq.UI.showMsg(`Failed to load history for "${nextPageName}".`, 'error');
-      }
-    } finally {
-      setLoading(false);
+      } catch {
+        setSnapshots([]);
+        setSelectedIds([]);
+        if (nextPageName) {
+          setPageName(nextPageName);
+          setLoadError(t('sidebar.loadError'));
+          void logseq.UI.showMsg(t('sidebar.loadErrorToast', { pageName: nextPageName }), 'error');
+        }
+      } finally {
+        setLoading(false);
     }
   }, []);
 
@@ -126,30 +127,30 @@ export function HistorySidebar({ onCompare, onClose }: HistorySidebarProps) {
       setSelectedIds([]);
       setLoadError('');
     } catch {
-      await logseq.UI.showMsg(`Failed to clear history for "${pageName}".`, 'error');
+      await logseq.UI.showMsg(t('sidebar.clearErrorToast', { pageName }), 'error');
     }
   }, [pageName]);
 
   return (
     <div className="local-history-panel">
       <div className="local-history-header">
-        <h3>Local History</h3>
-        <button type="button" className="local-history-close" onClick={onClose} aria-label="Close local history">
+        <h3>{t('sidebar.title')}</h3>
+        <button type="button" className="local-history-close" onClick={onClose} aria-label={t('sidebar.closeAria')}>
           x
         </button>
       </div>
 
-      {pageName ? <div className="local-history-page-name">Page: {pageName}</div> : null}
+      {pageName ? <div className="local-history-page-name">{t('sidebar.pageLabel', { pageName })}</div> : null}
 
       <div className="local-history-timeline">
-        {loading ? <div className="local-history-empty">Loading...</div> : null}
+        {loading ? <div className="local-history-empty">{t('sidebar.loading')}</div> : null}
 
         {!loading && !pageName ? (
-          <div className="local-history-empty">Navigate to a page to view its history.</div>
+          <div className="local-history-empty">{t('sidebar.navigateToPage')}</div>
         ) : null}
 
         {!loading && pageName && snapshots.length === 0 ? (
-          <div className="local-history-empty">{loadError || 'No history for this page yet.'}</div>
+          <div className="local-history-empty">{loadError || t('sidebar.noHistory')}</div>
         ) : null}
 
         {!loading && snapshots.length > 0
@@ -171,7 +172,7 @@ export function HistorySidebar({ onCompare, onClose }: HistorySidebarProps) {
                     checked={isSelected}
                     onChange={() => handleSelect(snapshot.id, true)}
                     onClick={(event) => event.stopPropagation()}
-                    aria-label={`Select version from ${formatAbsoluteTime(snapshot.timestamp)}`}
+                    aria-label={t('sidebar.selectVersionAria', { timestamp: formatAbsoluteTime(snapshot.timestamp) })}
                   />
                   <div className="snapshot-time" title={formatAbsoluteTime(snapshot.timestamp)}>
                     <div className="relative">{formatRelativeTime(snapshot.timestamp)}</div>
@@ -185,25 +186,25 @@ export function HistorySidebar({ onCompare, onClose }: HistorySidebarProps) {
 
       <div className="local-history-footer">
         <div className="count">
-          {snapshots.length} version{snapshots.length === 1 ? '' : 's'}
+          {tPlural('sidebar.versionCount', snapshots.length)}
         </div>
 
         <div className="local-history-actions">
           {selectedIds.length === 1 ? (
             <button type="button" className="btn btn-primary" onClick={() => void handleCompare()}>
-              Compare with Current
+              {t('sidebar.compareCurrent')}
             </button>
           ) : null}
 
           {selectedIds.length === 2 ? (
             <button type="button" className="btn btn-primary" onClick={() => void handleCompare()}>
-              Compare Selected
+              {t('sidebar.compareSelected')}
             </button>
           ) : null}
 
           {snapshots.length > 0 ? (
             <button type="button" className="btn btn-danger btn-sm" onClick={() => void handleClear()}>
-              Clear History
+              {t('sidebar.clearHistory')}
             </button>
           ) : null}
         </div>

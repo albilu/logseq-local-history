@@ -1,39 +1,42 @@
 import '@logseq/libs';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { setLocale, t } from './i18n';
 import { handleDbChanged, resetState } from './services/change-detector';
 import type { PluginSettings } from './types';
 
-const SETTINGS_SCHEMA = [
-  {
-    key: 'maxVersions',
-    type: 'number',
-    default: 50,
-    title: 'Maximum versions per page',
-    description: 'How many snapshots to keep for each page before pruning older entries.',
-  },
-  {
-    key: 'debounceMs',
-    type: 'number',
-    default: 5000,
-    title: 'Snapshot debounce (ms)',
-    description: 'Wait time after edits before capturing a new snapshot.',
-  },
-  {
-    key: 'excludePages',
-    type: 'string',
-    default: '',
-    title: 'Excluded pages',
-    description: 'Comma-separated page names to skip when recording history.',
-  },
-  {
-    key: 'disabled',
-    type: 'boolean',
-    default: false,
-    title: 'Disable plugin',
-    description: 'Pause history capture without uninstalling the plugin.',
-  },
-] as const;
+function getSettingsSchema() {
+  return [
+    {
+      key: 'maxVersions',
+      type: 'number',
+      default: 50,
+      title: t('settings.maxVersions.title'),
+      description: t('settings.maxVersions.description'),
+    },
+    {
+      key: 'debounceMs',
+      type: 'number',
+      default: 5000,
+      title: t('settings.debounceMs.title'),
+      description: t('settings.debounceMs.description'),
+    },
+    {
+      key: 'excludePages',
+      type: 'string',
+      default: '',
+      title: t('settings.excludePages.title'),
+      description: t('settings.excludePages.description'),
+    },
+    {
+      key: 'disabled',
+      type: 'boolean',
+      default: false,
+      title: t('settings.disabled.title'),
+      description: t('settings.disabled.description'),
+    },
+  ] as const;
+}
 
 function getSettings(): PluginSettings {
   const settings = logseq.settings as Partial<PluginSettings> | undefined;
@@ -51,7 +54,10 @@ function showLocalHistory(): void {
 }
 
 async function main(): Promise<void> {
-  logseq.useSettingsSchema([...SETTINGS_SCHEMA]);
+  const userConfigs = await logseq.App.getUserConfigs();
+  setLocale(typeof userConfigs?.preferredLanguage === 'string' ? userConfigs.preferredLanguage : 'en');
+
+  logseq.useSettingsSchema([...getSettingsSchema()]);
   logseq.provideModel({
     toggleHistory: showLocalHistory,
   });
@@ -59,7 +65,7 @@ async function main(): Promise<void> {
   logseq.App.registerUIItem('toolbar', {
     key: 'show-local-history',
     template: `
-      <a class="button" data-on-click="toggleHistory" title="Local History">
+      <a class="button" data-on-click="toggleHistory" title="${t('toolbar.localHistory')}">
         <span class="ti ti-history"></span>
       </a>
     `,
@@ -68,7 +74,7 @@ async function main(): Promise<void> {
   logseq.App.registerCommandPalette(
     {
       key: 'show-local-history',
-      label: 'Show Local History',
+      label: t('command.showLocalHistory'),
       keybinding: {
         binding: 'mod+shift+l',
       },

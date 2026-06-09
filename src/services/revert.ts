@@ -1,4 +1,5 @@
 import type { PageSnapshot, SerializedBlock } from '../types';
+import { getLocale, t } from '../i18n';
 import { addSnapshot } from './history-store';
 import { serializeBlockTree } from './snapshot';
 
@@ -73,13 +74,12 @@ export async function revertToSnapshot(
   try {
     await replacePageBlocks(snapshot.pageName, snapshot.blocks);
   } catch (error) {
-    console.error('[local-history] revert failed, restoring backup', error);
     await replacePageBlocks(snapshot.pageName, preRevertBlocks);
     throw error;
   }
 
   await logseq.UI.showMsg(
-    `Reverted to version from ${new Date(snapshot.timestamp).toLocaleString()}`,
+    t('revert.success', { timestamp: new Date(snapshot.timestamp).toLocaleString(getLocale()) }),
     'success'
   );
 }

@@ -41,6 +41,7 @@ export const mockApp = {
   registerCommandShortcut: vi.fn(),
   registerUIItem: vi.fn(),
   onCurrentGraphChanged: vi.fn(),
+  getUserConfigs: vi.fn(async () => ({ preferredLanguage: 'en' })),
 };
 
 export const mockDB = {

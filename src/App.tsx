@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import './App.css';
 import { DiffViewerPanel } from './components/DiffViewer';
 import { HistorySidebar } from './components/HistorySidebar';
+import { t } from './i18n';
 import type { PageSnapshot } from './types';
 
 const HOST_PANEL_WIDTH = '100vw';
@@ -83,17 +84,9 @@ export default function App() {
       try {
         const currentPage = await logseq.Editor.getCurrentPage();
         const samePage = isSamePage(currentPage, snapshotA);
-        console.info('[local-history] compare-current identity', {
-          snapshotPageName: snapshotA.pageName,
-          snapshotPageUuid: snapshotA.pageUuid,
-          currentPage,
-          resolvedCurrentPageName: getCurrentPageName(currentPage),
-          resolvedCurrentPageUuid: getCurrentPageUuid(currentPage),
-          samePage,
-        });
         if (!samePage) {
           await logseq.UI.showMsg(
-            'The current page changed. Close and reopen Local History for the new page.',
+            t('app.currentPageChanged'),
             'warning'
           );
           return;
@@ -102,7 +95,7 @@ export default function App() {
         const blocks = await logseq.Editor.getCurrentPageBlocksTree();
         currentBlocks = Array.isArray(blocks) ? (blocks as Array<Record<string, unknown>>) : [];
       } catch (error) {
-        const message = 'Failed to load the current page for comparison.';
+        const message = t('app.compareLoadFailed');
         void error;
         await logseq.UI.showMsg(message, 'error');
         return;

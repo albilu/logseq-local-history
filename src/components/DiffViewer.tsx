@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
+import { t } from '../i18n';
 import { revertToSnapshot } from '../services/revert';
 import { deserializeToText, serializeBlockTree } from '../services/snapshot';
 import type { PageSnapshot } from '../types';
@@ -45,7 +46,7 @@ export function DiffViewerPanel({
   }, [currentBlocks, snapshotB]);
 
   const oldTitle = formatAbsoluteTime(snapshotA.timestamp);
-  const newTitle = snapshotB ? formatAbsoluteTime(snapshotB.timestamp) : 'Current Version';
+  const newTitle = snapshotB ? formatAbsoluteTime(snapshotB.timestamp) : t('diff.currentVersion');
   const canRevert = snapshotB === null;
   const darkTheme = prefersDarkTheme();
 
@@ -56,9 +57,9 @@ export function DiffViewerPanel({
       }
 
       await navigator.clipboard.writeText(oldText);
-      await logseq.UI.showMsg('Copied to clipboard', 'success');
+      await logseq.UI.showMsg(t('diff.copied'), 'success');
     } catch {
-      await logseq.UI.showMsg('Copy failed. Clipboard access is unavailable.', 'error');
+      await logseq.UI.showMsg(t('diff.copyFailed'), 'error');
     }
   }, [oldText]);
 
@@ -70,7 +71,7 @@ export function DiffViewerPanel({
       await revertToSnapshot(snapshotA, maxVersions);
       onBack();
     } catch {
-      const message = 'Revert failed. Your previous version was saved.';
+      const message = t('diff.revertFailed');
       setErrorMessage(message);
       await logseq.UI.showMsg(message, 'error');
     } finally {
@@ -83,7 +84,7 @@ export function DiffViewerPanel({
       <div className="diff-header">
         <div className="diff-header-main">
           <button type="button" className="btn btn-sm" onClick={onBack}>
-            Back
+            {t('diff.back')}
           </button>
           <h3>
             {oldTitle} vs {newTitle}
@@ -96,15 +97,14 @@ export function DiffViewerPanel({
               type="checkbox"
               checked={splitView}
               onChange={(event) => setSplitView(event.target.checked)}
-            />{' '}
-            Split view
+            />{' '}{t('diff.splitView')}
           </label>
           <button type="button" className="btn btn-sm" onClick={() => void handleCopy()}>
-            Copy Old
+            {t('diff.copyOld')}
           </button>
           {canRevert ? (
             <button type="button" className="btn btn-primary btn-sm" onClick={handleRevert} disabled={reverting}>
-              {reverting ? 'Reverting...' : 'Revert to This Version'}
+              {reverting ? t('diff.reverting') : t('diff.revert')}
             </button>
           ) : null}
         </div>

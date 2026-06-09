@@ -1,3 +1,5 @@
+import { getLocale, t, tTimeHours } from './i18n';
+
 export function sanitizePageName(name: string): string {
   return name.replace(/[/\\:*?"<>|]/g, '_').replace(/_+/g, '_').toLowerCase();
 }
@@ -10,32 +12,32 @@ export function formatRelativeTime(timestamp: number): string {
   const days = Math.floor(hours / 24);
 
   if (seconds < 60) {
-    return 'just now';
+    return t('time.justNow');
   }
 
   if (minutes < 60) {
-    return `${minutes} min ago`;
+    return t('time.minutesAgo', { count: minutes });
   }
 
   if (hours < 24) {
-    return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    return tTimeHours(hours);
   }
 
   if (days === 1) {
-    return 'yesterday';
+    return t('time.yesterday');
   }
 
   if (days < 30) {
-    return `${days} days ago`;
+    return t('time.daysAgo', { count: days });
   }
 
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(getLocale(), {
     dateStyle: 'long',
   }).format(timestamp);
 }
 
 export function formatAbsoluteTime(timestamp: number): string {
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(getLocale(), {
     dateStyle: 'long',
     timeStyle: 'short',
   }).format(timestamp);
