@@ -2,6 +2,11 @@
 
 A Logseq plugin to track changes. It allows you to track your changes and revert to previous versions if needed.
 
+## Screenshots
+
+![image.png](./screenshots/image.png)
+![image_2.png](./screenshots/image_2.png)
+
 ## Features
 
 - Track logseq pages changes.
