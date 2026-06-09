@@ -1,0 +1,63 @@
+name: Publish plugin
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  PLUGIN_NAME: logseq-local-history
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package version
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION=${GITHUB_REF_NAME#v}
+
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "package.json version ($PACKAGE_VERSION) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Prepare package directory
+        run: |
+          ICON_FILE=$(node -p "const icon=require('./package.json').logseq?.icon || ''; icon.startsWith('./') ? icon.slice(2) : icon")
+
+          mkdir -p "$PLUGIN_NAME"
+          cp -R dist "$PLUGIN_NAME"/
+          cp package.json README.md "$PLUGIN_NAME"/
+          if [ -n "$ICON_FILE" ] && [ -f "$ICON_FILE" ]; then cp "$ICON_FILE" "$PLUGIN_NAME"/; fi
+
+      - name: Create release archives
+        run: |
+          zip -r "$PLUGIN_NAME.zip" "$PLUGIN_NAME"
+          tar -czf "$PLUGIN_NAME.tar.gz" "$PLUGIN_NAME"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            logseq-local-history.zip
+            logseq-local-history.tar.gz
+          generate_release_notes: true
