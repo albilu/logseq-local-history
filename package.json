@@ -1,6 +1,6 @@
 {
   "name": "logseq-local-history",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Track page changes in Logseq with local version history, diff view, and revert",
   "main": "dist/index.html",
   "author": "",

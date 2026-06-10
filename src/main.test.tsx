@@ -60,7 +60,7 @@ describe('plugin bootstrap', () => {
       key: 'show-local-history',
       label: 'Show Local History',
       keybinding: expect.objectContaining({
-        binding: 'mod+shift+l',
+        binding: 'alt+shift+h',
       }),
     }), expect.any(Function));
     expect(mockLogseq.App.registerCommandShortcut).not.toHaveBeenCalled();

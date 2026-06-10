@@ -76,7 +76,7 @@ async function main(): Promise<void> {
       key: 'show-local-history',
       label: t('command.showLocalHistory'),
       keybinding: {
-        binding: 'mod+shift+l',
+        binding: 'alt+shift+h',
       },
     },
     showLocalHistory
